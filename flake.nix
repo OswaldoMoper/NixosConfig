@@ -22,7 +22,6 @@
           #     fqdn = "smtp.gmail.com";
           #     loginAccounts = {
           #       "oswaldomoyap@gmail.com" = {
-          #         hashedPassword = "$2b$05$7wv1ukLN4uAADdhMBbbfI.luQHkBDmGFAnacu2PJjRMQCodeJSEqO";
           #         aliases = [ "oswaldomoyap@gmail.com" ];
           #       };
           #     };

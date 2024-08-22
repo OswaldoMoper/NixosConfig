@@ -126,6 +126,7 @@
     tree
     gnumake
     gmp
+    # git
     # Requisites for my work
     any-nix-shell
     cabal-install
@@ -152,7 +153,6 @@
     zlib
     # zsh
     # Requsites for doomemacs
-    git
     emacs
     ripgrep
     coreutils
@@ -207,6 +207,23 @@
     };
   # Enable brightness monitoring
     light.enable = true;
+  # Enable and config git
+    git = {
+      enable = true;
+      config = {
+        user = {
+          name = "MOPER";
+          email = "oswaldomoyap@gmail.com";
+        };
+        aliases = {
+          crf = "commit 'Refactor'";
+          spo = "stash pop";
+          spu = "stash push";
+          ssp = "stash show -p";
+          sli = "stash list";
+          };
+      };
+    };
   };
   # Enable the OpenSSH daemon.
   services = {
