@@ -1,2 +1,2 @@
 # NixosConfig
-This is how I build my nixos system
+This is how I build my NixOS
