@@ -1,35 +1,36 @@
 {
-  description = "oswaldo's system config";
-  inputs.nix.url = "github:nixos/nix/master";
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
-  # inputs.simple-nixos-mailserver.url = "gitlab:simple-nixos-mailserver/nixos-mailserver/nixos-23.11";
+  description = "Oswaldo's wsl config";
+  inputs = {
+    nix.url = "github:nixos/nix/master";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
+    nixos-wsl.url = "github:nix-community/NixOS-WSL/main";
+  };
 
   outputs = inputs@ { self
                     , nixpkgs
-                    , nixos-hardware
-                    # , simple-nixos-mailserver
+                    , nixos-wsl
                     , ... }:
   {
     nixosConfigurations = {
-      spartan = nixpkgs.lib.nixosSystem {
+      spartanWSL = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
+          nixos-wsl.nixosModules.default
+          {
+	          system.stateVersion = "24.05";
+            wsl.enable = true;
+            wsl.defaultUser = "omoper";
+            # Enable and configure networking and firewall
+            networking = {
+              hostName = "spartanWSL";
+              networkmanager.enable = true;
+              # wireless.enable = true; # Enables wireless support via wpa_supplicant.
+              # Open ports in the firewall.
+              firewall.allowedTCPPorts = [ 3000 5432 587 5938 57621 ];
+              firewall.allowedUDPPorts = [ 5938 5353 ];
+            };
+          }
           (import ./configuration.nix)
-          # simple-nixos-mailserver.nixosModule
-          # {
-          #   mailserver = {
-          #     enable = true;
-          #     fqdn = "smtp.gmail.com";
-          #     loginAccounts = {
-          #       "oswaldomoyap@gmail.com" = {
-          #         aliases = [ "oswaldomoyap@gmail.com" ];
-          #       };
-          #     };
-          #     # certificateScheme = "acme-nginx";
-          #   };
-          #   # security.acme.acceptTerms = true;
-          #   # security.acme.defaults.email = "oswaldomoyap@gmail.com";
-          # }
         ];
         specialArgs = { inherit inputs; };
       };
