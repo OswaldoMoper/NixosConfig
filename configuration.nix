@@ -79,9 +79,9 @@
     cabal-install
     curl
     direnv
-    stack
-    ghc
-    ghcid
+    # stack
+    # ghc
+    # ghcid
     hack-font
     haskellPackages.yesod-bin
     # haskell.compiler.ghc924
