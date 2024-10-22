@@ -9,20 +9,18 @@
   services = {
   # Enable the X11 windowing system.
     xserver.enable = true;
-  # Enable the Plasma 6 Desktop Environment.
+  # Enable the Desktop Environment.
     displayManager = {
       sddm = {
         enable = true;
         wayland.enable = true;
       };
-      defaultSession = "plasma";
     # Enable automatic login for the user.
       # autoLogin = {
       #   enable = true;
       #   user = "omoper";
       # };
     };
-    desktopManager.plasma6.enable = true;
   };
   # Define a user account.
   users.users.omoper = {
@@ -30,7 +28,7 @@
     description = "Oscar Oswaldo Moya Perez";
     extraGroups = [ "networkmanager" "wheel" "video" "audio" ];
     # Declare a password it's not recommended in WSL 
-    # hashedPassword = "your hashedPassword";
+    hashedPassword = "$6$IqhGanTrCJ3Y8GMS$2.q7j7DfXCbEEo1zUNkQTsSL5JuPpZbM4AghPXdycMBL6Hond51SCECELA7ufpbdrlq/u5UY/91Ph4Pu5Q/GW.";
     # password = "your password";
     shell = pkgs.zsh;
     # packages = with pkgs; [
@@ -46,7 +44,10 @@
     ];
     overlays = [
       # This is to install emacs-overlys and be able to configure doomemacs 
-      (import (builtins.fetchTarball https://github.com/nix-community/emacs-overlay/archive/master.tar.gz))
+      (import (builtins.fetchTarball {
+        url = "https://github.com/nix-community/emacs-overlay/archive/master.tar.gz";
+	      sha256 = "1nd1srgsdxzdij5nlgwxzr9imavf430ykm5s7g5dlqkwjpi6c217";
+      }))
     ];
   };
   # List packages installed in system profile.
@@ -93,7 +94,6 @@
     nix-prefetch-git
     oh-my-zsh
     sox
-    # sshpass
     stylish-haskell
     zlib
     # Requsites for doomemacs
@@ -107,24 +107,48 @@
 
   environment.pathsToLink = [
     "/share/nix-direnv"
+    "/share/zsh"
+  ];
+
+  fonts.fonts = with pkgs; [
+    hack-font
   ];
 
   programs = {
+  # Setuo VSCode Remote
+    nix-ld = {
+      enable = true;
+      package = pkgs.nix-ld-rs;
+    };
   # Enable and config Zsh
     nix-index.enableZshIntegration = true;
     zsh = {
       enable = true;
       enableCompletion = true;
       autosuggestions.enable = true;
-      interactiveShellInit = ''
-        # z - jump around
-        save_saliases=$(alias -L)
-        export ZSH=${pkgs.oh-my-zsh}/share/oh-my-zsh
-        export ZSH_THEME="bira" #"lambda"
-        plugins=(git sudo colorize extract history postgres)
-        source $ZSH/oh-my-zsh.sh
-        eval $save_aliases; unset save_aliases
-      '';
+      syntaxHighlighting.enable = true;
+      ohMyZsh.enable = true;
+      ohMyZsh.plugins = ["git" "sudo" "colorize" "extract" "history" "postgres"];
+      ohMyZsh.theme = "bira";
+      shellInit = ''
+      if [ ! -S ~/.ssh/ssh_auth_sock ]; then
+        echo  "'ssh-agent' has not been started since the last reboot." \
+              "Starting 'ssh-agent' now."
+        eval "$(ssh-agent)"
+        ln -sf "$SSH_AUTH_SOCK" ~/.ssh/ssh_auth_sock
+      fi
+      export SSH_AUTH_SOCK=~/.ssh/ssh_auth_sock
+      # see if any key files are already added to the ssh-agent, and if not, add them
+      ssh-add ~/.ssh/xpsoasis-ed25519
+      ssh-add ~/.ssh/github
+      ssh-add ~/.ssh/deploy_rsa
+      # ssh-add ~/.ssh/id_rsa
+      if [ "$?" -ne "0" ]; then
+        echo  "No ssh keys have been added to your 'ssh-agent' since the last" \
+              "reboot. Adding default keys now."
+        ssh-add
+      fi
+    '';
       promptInit = ''
         any-nix-shell zsh --info-right | source /dev/stdin
       '';
@@ -149,7 +173,6 @@
   # List services that you want to enable:
   services.postgresql = {
       enable = true;
-      # package = pkgs.postgresql_15;
       enableTCPIP = true;
       authentication = pkgs.lib.mkOverride 10 ''
         #type database DBUser address      auth-method

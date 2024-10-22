@@ -24,7 +24,6 @@
             networking = {
               hostName = "spartanWSL";
               networkmanager.enable = true;
-              # wireless.enable = true; # Enables wireless support via wpa_supplicant.
               # Open ports in the firewall.
               firewall.allowedTCPPorts = [ 3000 5432 587 5938 57621 ];
               firewall.allowedUDPPorts = [ 5938 5353 ];
