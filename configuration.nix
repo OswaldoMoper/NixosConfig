@@ -1,39 +1,39 @@
 { config, pkgs, lib, modulesPath, inputs, ... }:
 
 {
-  imports = [
-    # include NixOS-WSL modules
-    # <nixos-wsl/modules>
-  ];
-
   services = {
   # Enable the X11 windowing system.
-    xserver.enable = true;
+    xserver = {
+      enable = true;
+    # Configure keymap in X11
+      xkb = {
+        layout = "us";
+        variant = "altgr-intl";
+      };
+    };
   # Enable the Desktop Environment.
     displayManager = {
       sddm = {
         enable = true;
         wayland.enable = true;
       };
+      defaultSession = "plasma";
     # Enable automatic login for the user.
       # autoLogin = {
       #   enable = true;
       #   user = "omoper";
       # };
     };
+    desktopManager.plasma6.enable = true;
   };
   # Define a user account.
   users.users.omoper = {
     isNormalUser = true;
     description = "Oscar Oswaldo Moya Perez";
     extraGroups = [ "networkmanager" "wheel" "video" "audio" ];
-    # Declare a password it's not recommended in WSL 
+    # Declare a password it's not necessary in WSL 
     hashedPassword = "$6$IqhGanTrCJ3Y8GMS$2.q7j7DfXCbEEo1zUNkQTsSL5JuPpZbM4AghPXdycMBL6Hond51SCECELA7ufpbdrlq/u5UY/91Ph4Pu5Q/GW.";
-    # password = "your password";
     shell = pkgs.zsh;
-    # packages = with pkgs; [
-    #   microsoft-edge
-    # ];
   };
   # Packages config
   nixpkgs = {
@@ -51,71 +51,65 @@
     ];
   };
   # List packages installed in system profile.
-  environment.systemPackages = with pkgs; [
-    # Common packages
-    rename
-    texlive.combined.scheme-basic
-    wget
-    scrot
-    dmenu
-    tabbed
-    gparted
-    xdotool
-    xvkbd
-    hunspell
-    hunspellDicts.es-any
-    hunspellDicts.es-mx
-    hunspellDicts.en-us
-    aspellDicts.en
-    aspellDicts.en-computers
-    aspellDicts.en-science
-    aspellDicts.es
-    inkscape
-    cachix
-    tree
-    gnumake
-    gmp
-    # Requisites for my work
-    any-nix-shell
-    cabal-install
-    curl
-    direnv
-    # stack
-    # ghc
-    # ghcid
-    hack-font
-    haskellPackages.yesod-bin
-    # haskell.compiler.ghc924
-    haskell-language-server
-    insomnia
-    lambda-mod-zsh-theme
-    microsoft-edge
-    nix-direnv-flakes
-    nix-prefetch-git
-    oh-my-zsh
-    sox
-    stylish-haskell
-    zlib
-    # Requsites for doomemacs
-    emacs-git
-    ripgrep
-    coreutils
-    fd
-    clang
-    tmux
-  ];
-
-  environment.pathsToLink = [
-    "/share/nix-direnv"
-    "/share/zsh"
-  ];
-
+  environment = {
+    systemPackages = with pkgs; [
+      # Common packages
+      rename
+      texlive.combined.scheme-basic
+      wget
+      scrot
+      dmenu
+      tabbed
+      gparted
+      xdotool
+      xvkbd
+      hunspell
+      hunspellDicts.es-any
+      hunspellDicts.es-mx
+      hunspellDicts.en-us
+      aspellDicts.en
+      aspellDicts.en-computers
+      aspellDicts.en-science
+      aspellDicts.es
+      inkscape
+      cachix
+      tree
+      gnumake
+      gmp
+      # Requisites for my work
+      any-nix-shell
+      cabal-install
+      curl
+      direnv
+      hack-font
+      haskellPackages.yesod-bin
+      haskell-language-server
+      lambda-mod-zsh-theme
+      nix-direnv-flakes
+      nix-prefetch-git
+      oh-my-zsh
+      sox
+      stylish-haskell
+      zlib
+      # Requsites for doomemacs
+      emacs-git
+      ripgrep
+      coreutils
+      fd
+      clang
+      tmux
+    ];
+    pathsToLink = [
+      "/share/nix-direnv"
+      "/share/zsh"
+    ];
+  };
   fonts.fonts = with pkgs; [
     hack-font
   ];
-
+# List programs that you want to enable:
   programs = {
-  # Setuo VSCode Remote
+  # Setup VSCode Remote
     nix-ld = {
       enable = true;
       package = pkgs.nix-ld-rs;
@@ -153,8 +147,20 @@
         any-nix-shell zsh --info-right | source /dev/stdin
       '';
       };
-  # Enable brightness monitoring
-    light.enable = true;
+  # Enable and config msmtp
+    msmtp = {
+      enable = true;
+      accounts.default = {
+        tls  = true;
+        auth = true;
+        # auth = "SCRAM-SHA-256";
+        host = "smtp.gmail.com";
+        port = 587;
+        from = "oswaldomoyap@gmail.com";
+        user = "oswaldomoyap@gmail.com";
+        passwordeval = "cat ./password.txt";
+      };
+    };
   # Enable and config git
     git = {
       enable = true;
@@ -165,13 +171,14 @@
         };
       };
     };
-  };# Enable the OpenSSH daemon.
+  };
+# List services that you want to enable:
   services = {
+  # Enable the OpenSSH daemon.
     openssh.enable = true;
     sshd.enable = true;
-  };
-  # List services that you want to enable:
-  services.postgresql = {
+  # Enable and configure postgresql
+    postgresql = {
       enable = true;
       enableTCPIP = true;
       authentication = pkgs.lib.mkOverride 10 ''
@@ -188,6 +195,7 @@
         GRANT ALL PRIVILEGES ON DATABASE aanalyzer_yesod TO analyzer;
 	      GRANT ALL ON SCHEMA public TO analyzer;
       '';
+    };
   };
   # General Nix config
   nix = {
