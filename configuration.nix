@@ -42,13 +42,13 @@
       "haskell.compiler.ghc924"
       "haskell.compiler.ghc966"
     ];
-    overlays = [
+#     overlays = [
       # This is to install emacs-overlys and be able to configure doomemacs 
-      (import (builtins.fetchTarball {
-        url = "https://github.com/nix-community/emacs-overlay/archive/master.tar.gz";
-	      sha256 = "1nd1srgsdxzdij5nlgwxzr9imavf430ykm5s7g5dlqkwjpi6c217";
-      }))
-    ];
+#       (import (builtins.fetchTarball {
+#         url = "https://github.com/nix-community/emacs-overlay/archive/master.tar.gz";
+# 	      sha256 = "11m28vljiz8a6yw84skgv7gw09j353zmjjzkq68zgy05srh1pfj7";
+#       }))
+#     ];
   };
   # List packages installed in system profile.
   environment = {
@@ -92,7 +92,7 @@
       stylish-haskell
       zlib
       # Requsites for doomemacs
-      emacs-git
+      # emacs-git
       ripgrep
       coreutils
       fd
