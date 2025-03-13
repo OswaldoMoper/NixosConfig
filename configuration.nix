@@ -19,13 +19,15 @@
       };
       defaultSession = "plasma";
     # Enable automatic login for the user.
-      # autoLogin = {
-      #   enable = true;
-      #   user = "omoper";
-      # };
+      autoLogin = {
+        enable = true;
+        user = "omoper";
+      };
     };
     desktopManager.plasma6.enable = true;
   };
+  # Enable network manager
+  networking.networkmanager.enable = true;
   # Define a user account.
   users.users.omoper = {
     isNormalUser = true;
