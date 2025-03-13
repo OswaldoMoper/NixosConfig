@@ -192,8 +192,9 @@
       initialScript = pkgs.writeText "backend-initScript" ''
         CREATE ROLE analyzer WITH LOGIN PASSWORD 'anapass';
         CREATE DATABASE myapp_db;
+        ALTER DATABASE myapp_db OWNER TO analyzer;
         GRANT ALL PRIVILEGES ON DATABASE myapp_db TO analyzer;
-	      GRANT ALL ON SCHEMA public TO analyzer;
+        ALTER SCHEMA public OWNER TO analyzer;
       '';
     };
   };
