@@ -2,7 +2,7 @@
   description = "Oswaldo's wsl config";
   inputs = {
     nix.url = "github:nixos/nix/master";
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
     nixos-wsl.url = "github:nix-community/NixOS-WSL/main";
   };
 
@@ -17,7 +17,7 @@
         modules = [
           nixos-wsl.nixosModules.default
           {
-	          system.stateVersion = "24.05";
+	          system.stateVersion = "24.11";
             wsl.enable = true;
             wsl.defaultUser = "omoper";
             # Enable and configure networking and firewall
