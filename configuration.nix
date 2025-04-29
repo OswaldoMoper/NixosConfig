@@ -144,6 +144,7 @@
               "reboot. Adding default keys now."
         ssh-add
       fi
+      eval "$(direnv hook zsh)"
     '';
       promptInit = ''
         any-nix-shell zsh --info-right | source /dev/stdin
@@ -160,7 +161,7 @@
         port = 587;
         from = "omoper@example.com";
         user = "omoper@example.com";
-        passwordeval = "cat ./password.txt";
+        passwordeval = "cat /home/omoper/password.txt";
       };
     };
   # Enable and config git
