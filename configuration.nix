@@ -179,26 +179,6 @@
   # Enable the OpenSSH daemon.
     openssh.enable = true;
     sshd.enable = true;
-  # Enable and configure postgresql
-    postgresql = {
-      enable = true;
-      enableTCPIP = true;
-      authentication = pkgs.lib.mkOverride 10 ''
-        #type database DBUser address      auth-method
-        local all      all                 trust
-        # ipv4
-	      host all       all    127.0.0.1/32 trust
-        # ipv6
-        host all       all    ::1/128      trust
-      '';
-      initialScript = pkgs.writeText "backend-initScript" ''
-        CREATE ROLE analyzer WITH LOGIN PASSWORD 'anapass';
-        CREATE DATABASE myapp_db;
-        ALTER DATABASE myapp_db OWNER TO analyzer;
-        GRANT ALL PRIVILEGES ON DATABASE myapp_db TO analyzer;
-        ALTER SCHEMA public OWNER TO analyzer;
-      '';
-    };
   };
   # General Nix config
   nix = {
