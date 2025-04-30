@@ -1,4 +1,4 @@
-{ config, pkgs, lib, modulesPath, inputs, ... }:
+{ config, pkgs, lib, modulesPath, inputs, ... }@args:
 
 {
   services = {
@@ -100,6 +100,8 @@
       fd
       clang
       tmux
+      # Requisites for PostgreSQL
+      args.self.packages.x86_64-linux.nixos-rebuild-migration
     ];
     pathsToLink = [
       "/share/nix-direnv"

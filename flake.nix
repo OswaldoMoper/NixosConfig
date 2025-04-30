@@ -33,7 +33,7 @@
           (import ./postgresql.nix)
         ];
         specialArgs = {
-          inherit inputs nixpkgs nixos-wsl;
+          inherit self inputs nixpkgs nixos-wsl;
         };
       };
     };
