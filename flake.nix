@@ -17,9 +17,10 @@
         modules = [
           nixos-wsl.nixosModules.default
           {
-	          system.stateVersion = "24.11";
+            system.stateVersion = "24.11";
             wsl.enable = true;
             wsl.defaultUser = "omoper";
+            wsl.tarball.configPath = /etc/nixos;
             # Enable and configure networking and firewall
             networking = {
               hostName = "spartanWSL";
