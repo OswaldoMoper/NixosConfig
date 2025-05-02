@@ -55,11 +55,6 @@
   };
   # List packages installed in system profile.
   environment = {
-    system.userActivationScripts.zshrc = ''
-      if [ ! -f ~/.zshrc ]; then
-        touch ~/.zhsrc
-      fi
-    '';
     systemPackages = with pkgs; [
       # Common packages
       rename
@@ -119,6 +114,11 @@
   ];
 # TODO: Move program settings to a module
 # List programs that you want to enable:
+  system.userActivationScripts.zshrc = ''
+    if [ ! -f ~/.zshrc ]; then
+      touch ~/.zhsrc
+    fi
+  '';
   programs = {
   # Setup VSCode Remote
     nix-ld = {
