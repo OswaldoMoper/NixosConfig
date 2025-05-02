@@ -55,6 +55,11 @@
   };
   # List packages installed in system profile.
   environment = {
+    system.userActivationScripts.zshrc = ''
+      if [ ! -f ~/.zshrc ]; then
+        touch ~/.zhsrc
+      fi
+    '';
     systemPackages = with pkgs; [
       # Common packages
       rename
@@ -131,6 +136,15 @@
       ohMyZsh.plugins = ["git" "sudo" "colorize" "extract" "history" "postgres"];
       ohMyZsh.theme = "bira";
       shellInit = ''
+      REPO_PATH="/etc/nixos"
+      REPO_URL="https://github.com/OswaldoMoper/NixosConfig.git"
+      if [ ! -d "$REPO_PATH/.git" ]; then
+          echo "Configuring the $REPO_PATH directory"
+          git clone --recursive "$REPO_URL" "$REPO_PATH"
+          chmod -R u+w "$REPO_PATH"
+          git config --global --add safe.directory "$REPO_PATH"
+          git checkout spartanWSL
+      fi
       if [ ! -S ~/.ssh/ssh_auth_sock ]; then
         echo  "'ssh-agent' has not been started since the last reboot." \
               "Starting 'ssh-agent' now."
