@@ -114,11 +114,6 @@
   ];
 # TODO: Move program settings to a module
 # List programs that you want to enable:
-  system.userActivationScripts.zshrc = ''
-    if [ ! -f ~/.zshrc ]; then
-      touch ~/.zhsrc
-    fi
-  '';
   programs = {
   # Setup VSCode Remote
     nix-ld = {
