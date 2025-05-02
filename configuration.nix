@@ -144,6 +144,7 @@
           chmod -R u+w "$REPO_PATH"
           git config --global --add safe.directory "$REPO_PATH"
           git checkout spartanWSL
+          git remote set-url origin git@github.com:OswaldoMoper/NixosConfig.git
       fi
       if [ ! -S ~/.ssh/ssh_auth_sock ]; then
         echo  "'ssh-agent' has not been started since the last reboot." \
