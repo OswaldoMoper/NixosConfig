@@ -97,6 +97,10 @@
           exit 1
         }
 
+        log "INFO: Rebuild completed. Initializing Zsh..."
+        if [ ! -f ~/.zshrc ]; then
+          touch ~/.zhsrc
+
         if ! systemctl is-active postgresql > /dev/null 2>&1; then
             log "WARN: PostgreSQL service is not running after nixos-rebuild. Attempting restart..."
             systemctl restart postgresql || {
@@ -105,7 +109,7 @@
             }
         fi
 
-        log "INFO: Rebuild completed. Checking if restore is needed..."
+        log "INFO: Zsh has been initialized successfully. Checking if restore is needed..."
         postgresql_version_after=$(psql --version | awk '{print $3}' || {
           log "ERROR: Could not retrieve PostgreSQL version after nixos-rebuild. Exiting."
           exit 1
