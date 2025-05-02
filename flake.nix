@@ -45,6 +45,7 @@
         #!/usr/bin/env zsh
         set -e
 
+        nr_args="$@"
         log() {
           echo "[$(date)] - $1" | tee -a "$HOME/postgres_migration.log"
         }
@@ -91,7 +92,7 @@
         }
 
         log "INFO: Backup copied in $HOME/postgres_backup_local.sql. Running nixos-rebuild..."
-        nixos-rebuild switch || {
+        nixos-rebuild "$nr_args" || {
           log "ERROR: Could not execute nixos-rebuild. Aborting migration. See nix logs for details."
           exit 1
         }
