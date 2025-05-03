@@ -100,6 +100,7 @@
         log "INFO: Rebuild completed. Initializing Zsh..."
         if [ ! -f ~/.zshrc ]; then
           touch ~/.zhsrc
+        fi
 
         if ! systemctl is-active postgresql > /dev/null 2>&1; then
             log "WARN: PostgreSQL service is not running after nixos-rebuild. Attempting restart..."
