@@ -45,7 +45,6 @@
         #!/usr/bin/env zsh
         set -e
 
-        nr_args="$@"
         log() {
           echo "[$(date)] - $1" | tee -a "$HOME/postgres_migration.log"
         }
@@ -92,14 +91,14 @@
         }
 
         log "INFO: Backup copied in $HOME/postgres_backup_local.sql. Running nixos-rebuild..."
-        nixos-rebuild "$nr_args" || {
+        nixos-rebuild "$@" || {
           log "ERROR: Could not execute nixos-rebuild. Aborting migration. See nix logs for details."
           exit 1
         }
 
         log "INFO: Rebuild completed. Initializing Zsh..."
-        if [ ! -f ~/.zshrc ]; then
-          touch ~/.zhsrc
+        if [ ! -f "$HOME"/.zshrc ]; then
+          touch "$HOME"/.zshrc
         fi
 
         if ! systemctl is-active postgresql > /dev/null 2>&1; then
