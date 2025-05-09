@@ -141,7 +141,7 @@
       REPO_URL="https://github.com/OswaldoMoper/NixosConfig.git"
       if [ ! -d "$REPO_PATH/.git" ]; then
           echo "Configuring the $REPO_PATH directory"
-          rm -rf "$REPO_PATH"
+          sudo rm -rf "$REPO_PATH"
           git clone --recursive "$REPO_URL" "$REPO_PATH"
           sudo chmod -R u+w "$REPO_PATH"
           sudo chown -R omoper:users "$REPO_PATH"
@@ -150,7 +150,7 @@
           git checkout spartanWSL
           git remote set-url origin git@github.com:OswaldoMoper/NixosConfig.git
       fi
-      
+
       if [ ! -S ~/.ssh/ssh_auth_sock ]; then
         echo  "'ssh-agent' has not been started since the last reboot." \
               "Starting 'ssh-agent' now."
