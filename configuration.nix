@@ -131,16 +131,26 @@
       ohMyZsh.plugins = ["git" "sudo" "colorize" "extract" "history" "postgres"];
       ohMyZsh.theme = "bira";
       shellInit = ''
+      touch ~/.zshrc
+      if [ ! -d ~/.zshrc ]; then
+        echo "creating ~/.zshrc"
+        touch ~/.zshrc
+      fi
+
       REPO_PATH="/etc/nixos"
       REPO_URL="https://github.com/OswaldoMoper/NixosConfig.git"
       if [ ! -d "$REPO_PATH/.git" ]; then
           echo "Configuring the $REPO_PATH directory"
+          rm -rf "$REPO_PATH"
           git clone --recursive "$REPO_URL" "$REPO_PATH"
-          chmod -R u+w "$REPO_PATH"
+          sudo chmod -R u+w "$REPO_PATH"
+          sudo chown -R omoper:users "$REPO_PATH"
+          cd "$REPO_PATH"
           git config --global --add safe.directory "$REPO_PATH"
           git checkout spartanWSL
           git remote set-url origin git@github.com:OswaldoMoper/NixosConfig.git
       fi
+      
       if [ ! -S ~/.ssh/ssh_auth_sock ]; then
         echo  "'ssh-agent' has not been started since the last reboot." \
               "Starting 'ssh-agent' now."
@@ -158,6 +168,7 @@
               "reboot. Adding default keys now."
         ssh-add
       fi
+
       eval "$(direnv hook zsh)"
     '';
       promptInit = ''
