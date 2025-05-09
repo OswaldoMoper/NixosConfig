@@ -139,16 +139,19 @@
 
       REPO_PATH="/etc/nixos"
       REPO_URL="https://github.com/OswaldoMoper/NixosConfig.git"
+      REPO_URL_SSH="git@github.com:OswaldoMoper/NixosConfig.git"
       if [ ! -d "$REPO_PATH/.git" ]; then
           echo "Configuring the $REPO_PATH directory"
           sudo rm -rf "$REPO_PATH"
-          git clone --recursive "$REPO_URL" "$REPO_PATH"
+          sudo git clone --recursive "$REPO_URL" "$REPO_PATH"
           sudo chmod -R u+w "$REPO_PATH"
           sudo chown -R omoper:users "$REPO_PATH"
           cd "$REPO_PATH"
-          git config --global --add safe.directory "$REPO_PATH"
+          if ! git config --global --get-all safe.directory | grep -q "$REPO_PATH"; then
+            git config --global --add safe.directory "$REPO_PATH"
+          fi
           git checkout spartanWSL
-          git remote set-url origin git@github.com:OswaldoMoper/NixosConfig.git
+          git remote set-url origin "$REPO_URL_SSH"
       fi
 
       if [ ! -S ~/.ssh/ssh_auth_sock ]; then
