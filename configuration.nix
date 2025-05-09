@@ -213,11 +213,18 @@
   nix = {
     settings = {
       allow-import-from-derivation = true;
+      auto-optimise-store = true;
+      download-buffer-size = 671088640;
       # Nix users config
       trusted-public-keys = [ "hydra.iohk.io:f/Ea+s+dFdN+3Y/G+FDgSq+a5NEWhJGzdjvKNGv0/EQ=" ];
       substituters = [ "https://cache.iog.io" ];
       allowed-users = [ "@wheel" "omoper" ];
       trusted-users = [ "root" "omoper" ];
+    };
+    gc = {
+      automatic = true;
+      dates = "weekly";
+      options = "--delete-older-than 7d";
     };
     # Nix packages config
     package = pkgs.nixVersions.stable;
