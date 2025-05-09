@@ -131,27 +131,29 @@
       ohMyZsh.plugins = ["git" "sudo" "colorize" "extract" "history" "postgres"];
       ohMyZsh.theme = "bira";
       shellInit = ''
-      touch ~/.zshrc
-      if [ ! -d ~/.zshrc ]; then
+      NAME="OswaldoMoper"
+      echo "welcome to NixOS, $NAME"
+
+      if [ ! ~/.zshrc ]; then
         echo "creating ~/.zshrc"
         touch ~/.zshrc
       fi
 
       REPO_PATH="/etc/nixos"
-      REPO_URL="https://github.com/OswaldoMoper/NixosConfig.git"
-      REPO_URL_SSH="git@github.com:OswaldoMoper/NixosConfig.git"
+      REPO_URL="$NAME/NixosConfig.git"
+      REPO_CO="spartanWSL"
       if [ ! -d "$REPO_PATH/.git" ]; then
           echo "Configuring the $REPO_PATH directory"
           sudo rm -rf "$REPO_PATH"
-          sudo git clone --recursive "$REPO_URL" "$REPO_PATH"
+          sudo git clone --recursive https://github.com/"$REPO_URL" "$REPO_PATH"
           sudo chmod -R u+w "$REPO_PATH"
           sudo chown -R omoper:users "$REPO_PATH"
           cd "$REPO_PATH"
           if ! git config --global --get-all safe.directory | grep -q "$REPO_PATH"; then
             git config --global --add safe.directory "$REPO_PATH"
           fi
-          git checkout spartanWSL
-          git remote set-url origin "$REPO_URL_SSH"
+          git checkout "$REPO_CO"
+          git remote set-url origin git@github.com:"$REPO_URL"
       fi
 
       if [ ! -S ~/.ssh/ssh_auth_sock ]; then
@@ -161,14 +163,13 @@
         ln -sf "$SSH_AUTH_SOCK" ~/.ssh/ssh_auth_sock
       fi
       export SSH_AUTH_SOCK=~/.ssh/ssh_auth_sock
-      # see if any key files are already added to the ssh-agent, and if not, add them
-      ssh-add ~/.ssh/xpsoasis-ed25519
-      ssh-add ~/.ssh/github
-      ssh-add ~/.ssh/deploy_rsa
+      ssh-add ~/.ssh/"$NAME"_ed25519
+      ssh-add ~/.ssh/"$NAME"
+      ssh-add ~/.ssh/"$NAME"_rsa
       # ssh-add ~/.ssh/id_rsa
       if [ "$?" -ne "0" ]; then
-        echo  "No ssh keys have been added to your 'ssh-agent' since the last" \
-              "reboot. Adding default keys now."
+        echo  "No ssh keys have been added to your 'ssh-agent'" \
+              "since the last reboot. Adding default keys now."
         ssh-add
       fi
 
