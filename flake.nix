@@ -1,38 +1,39 @@
 {
   description = "Oswaldo's wsl config";
   inputs = {
-    nix.url = "github:nixos/nix/master";
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
     nixos-wsl.url = "github:nix-community/NixOS-WSL/main";
+    flake-utils.url = "github:numtide/flake-utils";
   };
 
   outputs = inputs@ { self
                     , nixpkgs
                     , nixos-wsl
+                    , flake-utils
                     , ... }:
-  {
+  let
+    modules = {
+      common      = ./nixosModules/common.nix;
+      graphical   = ./nixosModules/graphical.nix;
+      postgresql  = ./nixosModules/postgresql.nix;
+      spartan-WSL = ./nixosModules/spartanWSL.nix;
+      user        = ./nixosModules/user.nix;
+    };
+  in {
     nixosConfigurations = {
       spartanWSL = nixpkgs.lib.nixosSystem {
         system = "x86_64-linux";
         modules = [
           nixos-wsl.nixosModules.default
-          {
-            system.stateVersion = "24.11";
-            wsl.enable = true;
-            wsl.defaultUser = "omoper";
-            wsl.tarball.configPath = /etc/nixos;
-            # Enable and configure networking and firewall
-            networking = {
-              hostName = "spartanWSL";
-              networkmanager.enable = true;
-              # Open ports in the firewall.
-              firewall.allowedTCPPorts = [ 3000 5432 587 5938 57621 ];
-              firewall.allowedUDPPorts = [ 5938 5353 ];
-            };
-          }
-          (import ./configuration.nix)
-          (import ./postgresql.nix)
+          modules.common
+          modules.graphical
+          modules.postgresql
+          modules.spartan-WSL
+          modules.user
         ];
+        #  ++ (if !config.wsl.enable
+        #       then [ nixosModules.graphical ]
+        #       else []);
         specialArgs = {
           inherit self inputs nixpkgs nixos-wsl;
         };
@@ -45,32 +46,34 @@
         #!/usr/bin/env zsh
         set -e
 
+        USER_HOME=/home/omoper
+
         log() {
-          echo "[$(date)] - $1" | tee -a "$HOME/postgres_migration.log"
+          echo "[$(date)] - $1" | tee -a "$USER_HOME/postgres_migration.log"
         }
         perform_migration() {
           log "INFO: Starting PostgreSQL restore..."
 
-          if [ -s $HOME/backups/postgres_backup.sql ]; then
+          if [ -s $USER_HOME/backups/postgres_backup.sql ]; then
             log "INFO: Restoring PostgreSQL database..."
-            if ! grep -q "PostgreSQL database dump" "$HOME/backups/postgres_backup.sql"; then
+            if ! grep -q "PostgreSQL database dump" "$USER_HOME/backups/postgres_backup.sql"; then
                 log "ERROR: Backup file appears to be invalid or corrupted. Aborting migration."
                 exit 1
             else
-              psql -U postgres < $HOME/backups/postgres_backup.sql || {
+              psql -U postgres < $USER_HOME/backups/postgres_backup.sql || {
                 log "ERROR: Restore failed. Aborting migration."
                 exit 1
               }
             fi
           else
-            log "ERROR: Backup file is empty or missing ($HOME/backups/postgres_backup.sql). Aborting migration."
+            log "ERROR: Backup file is empty or missing ($USER_HOME/backups/postgres_backup.sql). Aborting migration."
             exit 1
           fi
 
           log "INFO: Restore completed..."
-          rm -f $HOME/backups/postgres_backup.sql
+          rm -f $USER_HOME/backups/postgres_backup.sql
           psql -U analyzer -d aanalyzer_yesod -c '\dt'
-          log "INFO: PostgreSQL migration script executed. Backup directory: $HOME/postgres_backup_local.sql"
+          log "INFO: PostgreSQL migration script executed. Backup directory: $USER_HOME/postgres_backup_local.sql"
         }
 
         postgresql_version_before=$(psql --version | awk '{print $3}' || {
@@ -79,26 +82,26 @@
         })
 
         log "INFO: PostgreSQL version before nixos-rebuild: $postgresql_version_before. Backing up PostgreSQL..."
-        mkdir -p $HOME/backups && pg_dumpall -U postgres > $HOME/backups/postgres_backup.sql || {
+        mkdir -p $USER_HOME/backups && pg_dumpall -U postgres > $USER_HOME/backups/postgres_backup.sql || {
           log "ERROR: Backup failed. Aborting nixos-rebuild."
           exit 1
         }
 
         log "INFO: Backup completed. Copying backup locally..."
-        cp $HOME/backups/postgres_backup.sql $HOME/postgres_backup_local.sql || {
+        cp $USER_HOME/backups/postgres_backup.sql $USER_HOME/postgres_backup_local.sql || {
           log "ERROR: Backup copy failed. Aborting nixos-rebuild."
           exit 1
         }
 
-        log "INFO: Backup copied in $HOME/postgres_backup_local.sql. Running nixos-rebuild..."
+        log "INFO: Backup copied in $USER_HOME/postgres_backup_local.sql. Running nixos-rebuild..."
         nixos-rebuild "$@" || {
           log "ERROR: Could not execute nixos-rebuild. Aborting migration. See nix logs for details."
           exit 1
         }
 
         log "INFO: Rebuild completed. Initializing Zsh..."
-        if [ ! -f "$HOME"/.zshrc ]; then
-          touch "$HOME"/.zshrc
+        if [ ! -f "$USER_HOME"/.zshrc ]; then
+          touch "$USER_HOME"/.zshrc
         fi
 
         if ! systemctl is-active postgresql > /dev/null 2>&1; then
@@ -126,5 +129,6 @@
         fi
       '';
     };
+    nixosModules = modules;
   };
 }
