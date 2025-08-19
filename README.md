@@ -1,6 +1,6 @@
 <h1 align=center>
   NixOS-WSL config<br />
-  <a href="https://github.com/NixOS/nixpkgs/tree/nixos-24.05"><img src="https://img.shields.io/badge/nixpkgs-24.05-brightgreen" alt="nixpkgs 24.05" /></a>
+  <a href="https://github.com/NixOS/nixpkgs/tree/nixos-25.05"><img src="https://img.shields.io/badge/nixpkgs-24.05-brightgreen" alt="nixpkgs 25.05" /></a>
 </h1>
 
 Modules for running NixOS on the Windows Subsystem for Linux
