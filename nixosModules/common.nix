@@ -44,7 +44,7 @@
     gc = {
       automatic = true;
       dates = "weekly";
-      options = "--delete-older-than 7d";
+      options = "--delete-older-than 30d";
     };
     # Nix packages config
     package = pkgs.nixVersions.stable;
@@ -54,8 +54,9 @@
       keep-derivations = true
     '';
   };
+  nixpkgs.config.allowUnfree = true;
+  home-manager.useGlobalPkgs = true;
+  home-manager.useUserPackages = true;
   # General Nixos configurations
   system.configurationRevision = inputs.nixpkgs.lib.mkIf (inputs.self ? rev) inputs.self.rev;
-
-
 }
