@@ -1,38 +1,60 @@
 {
-  description = "oswaldo's system config";
-  inputs.nix.url = "github:nixos/nix/master";
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-24.05";
-  # inputs.simple-nixos-mailserver.url = "gitlab:simple-nixos-mailserver/nixos-mailserver/nixos-23.11";
-
+  description = "Oswaldo's Universal NixOS configuration";
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.05";
+    nixos-wsl.url = "github:nix-community/NixOS-WSL/main";
+    home-manager = {
+      url = "github:nix-community/home-manager/release-25.05";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    flake-utils.url = "github:numtide/flake-utils";
+    nixTalk.url = "github:OswaldoMoper/nixTalk";
+    moper = {
+      type = "path";
+      path = "/home/omoper/oswaldomoper.com";
+    };
+  };
   outputs = inputs@ { self
                     , nixpkgs
-                    , nixos-hardware
-                    # , simple-nixos-mailserver
+                    , nixos-wsl
+                    , flake-utils
+                    , home-manager
                     , ... }:
-  {
-    nixosConfigurations = {
-      spartan = nixpkgs.lib.nixosSystem {
-        system = "x86_64-linux";
-        modules = [
-          (import ./configuration.nix)
-          # simple-nixos-mailserver.nixosModule
-          # {
-          #   mailserver = {
-          #     enable = true;
-          #     fqdn = "smtp.gmail.com";
-          #     loginAccounts = {
-          #       "omoper@example.com" = {
-          #         aliases = [ "omoper@example.com" ];
-          #       };
-          #     };
-          #     # certificateScheme = "acme-nginx";
-          #   };
-          #   # security.acme.acceptTerms = true;
-          #   # security.acme.defaults.email = "omoper@example.com";
-          # }
-        ];
-        specialArgs = { inherit inputs; };
+  let
+    system = "x86_64-linux";
+    hostDir = ./hosts;
+    hostFiles = builtins.filter
+      (name: builtins.match ".*\\.nix$" name != null)
+      (builtins.attrNames (builtins.readDir hostDir));
+    mkHost = hostName: nixpkgs.lib.nixosSystem {
+      inherit system;
+      specialArgs = {
+        inherit self inputs nixpkgs nixos-wsl;
       };
+      modules = [
+        nixos-wsl.nixosModules.default
+        home-manager.nixosModules.home-manager
+        (import ./nixosModules/common.nix)
+        (import ./nixosModules/graphical.nix)
+        (import ./nixosModules/webstack.nix)
+        (import ./nixosModules/postgresql.nix)
+        (import ./nixosModules/user.nix)
+      ] ++ [
+        (import (hostDir + "/${hostName}.nix"))
+      ];
     };
+  in {
+    nixosConfigurations =
+      builtins.listToAttrs (map (file: {
+        name = builtins.replaceStrings [".nix"] [""] file;
+        value = mkHost (builtins.replaceStrings [".nix"] [""] file);
+      }) hostFiles);
+    packages.${system} = let
+      pkgs = nixpkgs.legacyPackages.${system};
+      migrationScript = builtins.readFile ./scripts/nixos-rebuild-migration.sh;
+    in {
+      nixos-rebuild-migration = pkgs.writeShellScriptBin "nixos-rebuild-migration" migrationScript;
+    };
+    nixosModules = modules;
   };
 }
