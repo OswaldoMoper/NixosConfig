@@ -22,6 +22,15 @@
                     , ... }:
   let
     system = "x86_64-linux";
+    modules = [
+        nixos-wsl.nixosModules.default
+        home-manager.nixosModules.home-manager
+        (import ./nixosModules/common.nix)
+        (import ./nixosModules/graphical.nix)
+        (import ./nixosModules/webstack.nix)
+        (import ./nixosModules/postgresql.nix)
+        (import ./nixosModules/user.nix)
+      ];
     hostDir = ./hosts;
     hostFiles = builtins.filter
       (name: builtins.match ".*\\.nix$" name != null)
@@ -31,15 +40,7 @@
       specialArgs = {
         inherit self inputs nixpkgs nixos-wsl;
       };
-      modules = [
-        nixos-wsl.nixosModules.default
-        home-manager.nixosModules.home-manager
-        (import ./nixosModules/common.nix)
-        (import ./nixosModules/graphical.nix)
-        (import ./nixosModules/webstack.nix)
-        (import ./nixosModules/postgresql.nix)
-        (import ./nixosModules/user.nix)
-      ] ++ [
+      modules = modules ++ [
         (import (hostDir + "/${hostName}.nix"))
       ];
     };
