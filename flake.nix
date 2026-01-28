@@ -13,12 +13,17 @@
       type = "path";
       path = "/home/omoper/oswaldomoper.com";
     };
+    deploy-rs = {
+      url = "github:serokell/deploy-rs";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
   outputs = inputs@ { self
                     , nixpkgs
                     , nixos-wsl
                     , flake-utils
                     , home-manager
+                    , deploy-rs
                     , ... }:
   let
     system = "x86_64-linux";
@@ -41,6 +46,7 @@
         inherit self inputs nixpkgs nixos-wsl;
       };
       modules = modules ++ [
+        { networking.hostName = hostName; }
         (import (hostDir + "/${hostName}.nix"))
       ];
     };
@@ -52,10 +58,13 @@
       }) hostFiles);
     packages.${system} = let
       pkgs = nixpkgs.legacyPackages.${system};
-      migrationScript = builtins.readFile ./scripts/nixos-rebuild-migration.sh;
+      rebuildMigration = builtins.readFile ./scripts/nixos-rebuild-migration.sh;
+      deployMigration = builtins.readFile ./scripts/deploy-migration.sh;
     in {
-      nixos-rebuild-migration = pkgs.writeShellScriptBin "nixos-rebuild-migration" migrationScript;
+      nixos-rebuild-migration = pkgs.writeShellScriptBin "nixos-rebuild-migration" rebuildMigration;
+      deploy-migration = pkgs.writeShellScriptBin "deploy-migration" deployMigration;
     };
     nixosModules = modules;
+    deploy = deploy-rs.lib;
   };
 }
