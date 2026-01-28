@@ -1036,17 +1036,17 @@
         ]
       },
       "locked": {
-        "lastModified": 1768530149,
-        "narHash": "sha256-dwtaIvAUFQ19IWnAewEW3+dwpxTZll+RI0bBQCi9+r4=",
-        "ref": "refs/heads/master",
-        "rev": "84c38bddcf350def149c475fab651839e53d3002",
-        "revCount": 5,
-        "type": "git",
-        "url": "ssh://git@github.com/OswaldoMoper/nixTalk.git"
+        "lastModified": 1769027714,
+        "narHash": "sha256-mI5t93Sv5rVgD3C4JZIkMNRc32wId0mqNAdDQwIcBE8=",
+        "owner": "OswaldoMoper",
+        "repo": "nixTalk",
+        "rev": "2c2250d4afb4c5cc7fad5f064694269720129e58",
+        "type": "github"
       },
       "original": {
-        "type": "git",
-        "url": "ssh://git@github.com/OswaldoMoper/nixTalk.git"
+        "owner": "OswaldoMoper",
+        "repo": "nixTalk",
+        "type": "github"
       }
     },
     "nixos-wsl": {
