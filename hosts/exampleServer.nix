@@ -64,6 +64,9 @@
     vim
     emacs
     zsh
+  ] ++ [
+    deploy-rs.defaultPackage.${pkgs.system}
+    self.packages.${pkgs.system}.deploy-migration
+    self.packages.x86_64-linux.nixos-rebuild-migration
   ];
-
 }
