@@ -3,19 +3,23 @@
   <a href="https://github.com/NixOS/nixpkgs/tree/nixos-25.05"><img src="https://img.shields.io/badge/nixpkgs-25.05-brightgreen" alt="nixpkgs 25.05" /></a>
 </h1>
 
-Modular, multiuser and multihost configuration for NixOS (also NixOS-WSL); reproducible, extensible and maintainable in one branch.
+Modular, multiuser, multiapp and multihost configuration for NixOS (also NixOS-WSL); reproducible, extensible and maintainable in one branch.
 
 ---
 
-- [General description](#-general-description)
-- [Quick Start (WSL)](#-quick-start-wsl)
-- [Quick Start (Pure NixOS)](#️-quick-start-pure-nixos)
-- [Project Structure](#️-project-structure)
-- [Declaring users (multiuser)](#-declaring-users)
-- [Declaring hosts (multihost)](#️-declaring-hosts)
-- [System rebuild](#-system-rebuild)
-- [Notes](#-notes)
-- [License](#️-license)
+- [🔍 General description](#-general-description)
+- [🏎️ Quick Start (WSL)](#️-quick-start-wsl)
+- [🏎️ Quick Start (Pure NixOS)](#️-quick-start-pure-nixos)
+- [⚙️ Project Structure](#️-project-structure)
+- [👤 Declaring users (multiuser)](#-declaring-users)
+- [🖥️ Declaring hosts (multihost)](#️-declaring-hosts)
+- [🧩 Declaring apps (multiapp)](#-declaring-apps)
+- [🚀 Deployment](#-deploying-to-remote-servers-deploy-rs)
+- [🐘 Deployment + Migration](#-postgresql-migration-deploy-migration)
+- [🔧 System rebuild](#-system-rebuild)
+- [🐘 Rebuild + Migration](#-postgresql-migration-nixos-rebuild-migration)
+- [🧠 Notes](#-notes)
+- [⚖️ License](#️-license)
 
 ---
 
@@ -33,7 +37,7 @@ The objective is to allow each host to declare only the essentials, while the re
 
 ---
 
-## 🚀 Quick Start (WSL)
+## 🏎️ Quick Start (WSL)
 
 1. Enable WSL if you haven't done already:
 
@@ -105,6 +109,9 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
 
 ``` markdown
 ├── flake.nix
+├── scripts/
+│   ├── deploy-migration.sh
+│   └── nixos-rebuild-migration.sh
 ├── hosts/
 │   ├── spartanWSL.nix
 │   ├── laptop.nix
@@ -120,6 +127,8 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
     ├── motorsport.nix
     └── default.nix
 ```
+
+---
 
 ## 👤 Declaring users
 
@@ -168,6 +177,9 @@ Each file on `hosts/` represents a machine:
 
 ```Nix
 { pkgs, ... }: {
+  # This repository doesn't include hardware configs
+  imports = [ ../nixosModules/hardware-configuration.nix ];
+
   networking.hostName = "spartanWSL";
   graphical.enable = true;
   wsl.enable = true;
@@ -179,7 +191,138 @@ The flake automatically detects all hosts in the `hosts/` directory.
 
 ---
 
+## 🧩 Declaring apps
+
+To use an external app, add the input reference in `flake.nix`
+
+```Nix
+{
+  # ... other inputs ...
+  inputs.nixTalk.url = "github:OswaldoMoper/nixTalk";
+  # ... other flake configurations ...
+}
+```
+
+If the app is a web app that you are going to host, define the following in the corresponding host file:
+
+```Nix
+{pkgs, ... }: {
+  # ... other host configurations ...
+  webStack.apps = [
+    {
+      name = "nixTalk";
+      domain = "nixTalk.oswaldomoper.com";
+      port = 2000;
+      static = "/home/<user>/nixTalk/static";
+      package = inputs.nixTalk.packages.${pkgs.system}.nixTalk-wrapper;
+    }
+  ];
+  # ... other host configurations ...
+}
+```
+
+---
+
+## 🚀 Deploying to remote servers (deploy-rs)
+
+This repository supports declarative deployments using **deploy-rs**.
+Each host can optionally define a remote deployment target.
+
+### 1. Declaring a deployable host
+
+Inside the host file:
+
+```Nix
+{pkgs, ... }: {
+  # ... other host configurations ...
+  deploy.nodes.myServer = {
+    hostname = "0.0.0.0";
+    profiles.system = {
+      sshUser = "example";
+      path = deploy-rs.lib.activate.nixos self.nixos.nixosConfigurations.myServer;
+      user = "root"
+    };
+  };
+  environment.systemPackages = [
+    # ... other systemPackages ...
+    inputs.deploy-rs.defaultPackage.${pkgs.system}
+    # ... other systemPackages ...
+  ];
+  # ... other host configurations ...
+}
+```
+
+### 2. Running a deployment
+
+```Bash
+nix run .#deploy -- --hostname myServer
+```
+
+or 
+
+```bash
+deploy -- --hostname myServer
+```
+
+This will:
+
+- build the system
+- upload the closure
+- activate the new configuration
+
+---
+
+## 🐘 PostgreSQL migration (deploy-migration)
+
+This flake includes a helper script that performs safe PostgreSQL migrations during deploys.
+
+### What the script does
+
+- connects to the remote server
+- creates a full PostgreSQL backup
+- downloads the backup locally
+- runs `deploy-rs`
+- detects if PostgreSQL version changed
+- restores the database if needed
+
+### Running a migration deploy
+
+```bash
+nix run .#deploy-migration -- myServer
+```
+
+or 
+
+```bash
+deploy-migration -- myServer
+```
+
+### Installing deploy-migration on a host
+
+`deploy-migration` is optional. Only hosts that perform remote deployments need it.
+
+To enable it on a specific host:
+
+```nix
+{pkgs,...}: {
+  # ... other host configurations ...
+  environment.systemPackages = [
+    # ... other systemPackages ...
+    inputs.deploy-rs.defaultPackage.${pkgs.system}
+    self.packages.${pkgs.system}.deploy-migration
+    # ... other systemPackages ...
+  ];
+  # ... other host configurations ...
+}
+```
+
+This keeps deployment tooling out of machines that don't need it (e.g. laptops, WSL, development hosts).
+
+---
+
 ## 🔧 System rebuild
+
+The very first rebuild run
 
 ```bash
   sudo nixos-rebuild switch --flake .#<hostname>
@@ -190,6 +333,67 @@ Example
 ```bash
   sudo nixos-rebuild switch --flake .#spartanWSL
 ```
+
+---
+
+## 🐘 PostgreSQL migration (nixos-rebuild-migration)
+
+This repository includes a local helper tool that extends `nixos-rebuild` with automatic PostgreSQL backup and restore logic.
+
+Use this tool when rebuilding local machines (laptops, desktops, WSL, development servers).
+
+### What the tool does
+
+- creates a full PostgreSQL backup before rebuilding
+- runs `nixos-rebuild`
+- detects if the PostgreSQL version changed
+- restores the databases if needed
+
+This ensures safe upgrades when switching between NixOS generations that includes PostgreSQL version bumps.
+
+### Running a migration rebuild
+
+```bash
+  sudo nixos-rebuild-migration switch --flake .#<hostname>
+```
+
+Example:
+
+```bash
+  sudo nixos-rebuild-migration switch --flake .#spartanWSL
+```
+
+### When to use this tool
+
+Use `nixos-rebuild-migration` instead of `nixos-rebuild` when:
+
+- your host uses PostgreSQL module
+- you are updating NixOS to a new release
+- you suspect PostgreSQL might upgrade
+- you want safe, automatic backup/restore behavior
+
+For normal rebuild without PostgreSQL changes, it behaves exactly like `nixos-rebuild`.
+
+### Installing nixos-rebuild-migration on a host
+
+`nixos-rebuild-migration` is also optional.
+Only hosts that use PostgreSQL locally should enable it.
+
+To enable it:
+
+```nix
+{pkgs,...}: {
+  # ... other host configurations ...
+  environment.systemPackages = [
+    # ... other systemPackages ...
+    self.packages.${pkgs.system}.nixos-rebuild-migration
+    # ... other systemPackages ...
+  ];
+  # ... other host configurations ...
+}
+```
+
+This avoids installing PostgreSQL migration tooling on machines that don't use PostgreSQL.
 
 ---
 
