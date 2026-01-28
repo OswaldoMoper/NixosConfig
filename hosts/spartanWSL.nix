@@ -72,7 +72,6 @@ in
   };
   # Enable and configure networking and firewall
   networking = {
-    hostName = "spartanWSL";
     networkmanager.enable = true;
     # Open ports in the firewall
     firewall = {
