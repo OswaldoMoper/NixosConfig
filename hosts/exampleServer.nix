@@ -1,6 +1,14 @@
-{ pkgs, self, deploy-rs, inputs, ... }:
+# This is a configuration example of a server to be deploy
+{ pkgs, self, inputs, ... }:
 
 {
+  # Dummy Hardware-configuration:
+  # Use the hardware-configuration.nix gave it by nixos-generate instead of this
+  # Use: imports = [./hardware/<name>.nix];
+  fileSystems."/".device = "/dev/disk/by-label/nixos";
+  boot.loader.grub.enable = true;
+  boot.loader.grub.device = "/dev/sda";
+
   # Dummy user
   myUsers.example = {
     enable = true;
@@ -33,16 +41,7 @@
       }
     ];
   };
-  # Dummy deploy.nodes
-  deploy.nodes.exampleServer = {
-    hostname = "0.0.0.0";
-    fastConnection = false;
-    profiles.system = {
-      sshUser = "example";
-      path = deploy-rs.lib.activate.nixos self.nixosConfigurations.exampleServer;
-      user = "root";
-    };
-  };
+
   # Dummy PostgreSQL server
   postgresql = {
     enable = true;
@@ -65,8 +64,6 @@
     emacs
     zsh
   ] ++ [
-    deploy-rs.defaultPackage.${pkgs.system}
-    self.packages.${pkgs.system}.deploy-migration
     self.packages.x86_64-linux.nixos-rebuild-migration
   ];
 }
