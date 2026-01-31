@@ -114,6 +114,9 @@ in
       cloudflared
       wslu
       sops
+      # Requisites for deploying tools
+      inputs.deploy-rs.packages.${pkgs.system}.default
+      self.packages.${pkgs.system}.deploy-migration
     ];
   };
   # General Nix config
