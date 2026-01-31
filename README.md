@@ -18,6 +18,7 @@ Modular, multiuser, multiapp and multihost configuration for NixOS (also NixOS-W
 - [🐘 Deployment + Migration](#-postgresql-migration-deploy-migration)
 - [🔧 System rebuild](#-system-rebuild)
 - [🐘 Rebuild + Migration](#-postgresql-migration-nixos-rebuild-migration)
+- [📚 Documentation](#-documentation)
 - [🧠 Notes](#-notes)
 - [⚖️ License](#️-license)
 
@@ -94,7 +95,7 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
    Example:
 
    ```bash
-     sudo nixos-rebuild switch --flake .#tank
+     sudo nixos-rebuild switch --flake .#laptop
    ```
 
 4. Reboot if necessary:
@@ -113,9 +114,12 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
 │   ├── deploy-migration.sh
 │   └── nixos-rebuild-migration.sh
 ├── hosts/
+│   ├── hardware/
+│   │   ├── server.nix  ← Not included
+│   │   └── laptop.nix  ← Not included
 │   ├── spartanWSL.nix
-│   ├── laptop.nix
-│   └── server.nix
+│   ├── laptop.nix      ← Not included
+│   └── server.nix      ← Not included
 ├── nixosModules/
 │   ├── common.nix
 │   ├── graphical.nix
@@ -123,9 +127,9 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
 │   ├── user.nix        ← multiuser module
 │   └── webstack.nix
 └── hmProfiles/
-    ├── dev.nix
-    ├── motorsport.nix
-    └── default.nix
+    ├── dev.nix         ← Not included yet
+    ├── motorsport.nix  ← Not included yet
+    └── default.nix     ← Not included yet
 ```
 
 ---
@@ -135,30 +139,34 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
 Each user is declared on the corresponding host:
 
 ```Nix
-myUsers.omoper = {
-  enable = true;
-  fullName = "Oswaldo Moper";
-  email = "example@gmail.com";
-  home = {
+{pkgs, ... }: {
+  # ... other host configurations ...
+  myUsers.omoper = {
     enable = true;
-    git = {
+    fullName = "Oswaldo Moper";
+    email = "example@gmail.com";
+    home = {
       enable = true;
-      tag = "OswaldoMoper";
-    };
-    msmtp = {
-      enable = true;
-      passwordFile = "/home/omoper/password.txt";
-    };
-    sshKeys = {
-      enable = true;
-      baseName = {
+      git = {
         enable = true;
-        name = "OswaldoMoper";
+        tag = "OswaldoMoper";
       };
+      msmtp = {
+        enable = true;
+        passwordFile = "/home/omoper/password.txt";
+      };
+      sshKeys = {
+        enable = true;
+        baseName = {
+          enable = true;
+          name = "OswaldoMoper";
+        };
+      };
+      vscode.enable = true;
     };
-    vscode.enable = true;
   };
-};
+  # ... other host configurations ...
+}
 ```
 
 This activates:
@@ -178,9 +186,11 @@ Each file on `hosts/` represents a machine:
 ```Nix
 { pkgs, ... }: {
   # This repository doesn't include hardware configs
-  imports = [ ../nixosModules/hardware-configuration.nix ];
+  imports = [ ./hosts/hardware/configuration.nix ];
 
+  # You can ignore this attribute and nixos will use the filename
   networking.hostName = "spartanWSL";
+
   graphical.enable = true;
   wsl.enable = true;
   myUsers.omoper.enable = true;
@@ -225,7 +235,7 @@ If the app is a web app that you are going to host, define the following in the 
 
 ## 🚀 Deploying to remote servers (deploy-rs)
 
-This repository supports declarative deployments using **deploy-rs**.
+This repository supports declarative deployments using a **deploy-rs** based DSL.
 Each host can optionally define a remote deployment target.
 
 ### 1. Declaring a deployable host
@@ -235,11 +245,11 @@ Inside the host file:
 ```Nix
 {pkgs, ... }: {
   # ... other host configurations ...
-  deploy.nodes.myServer = {
+  deployment.myServer = {
     hostname = "0.0.0.0";
     profiles.system = {
       sshUser = "example";
-      path = deploy-rs.lib.activate.nixos self.nixos.nixosConfigurations.myServer;
+      path = deploy-rs.lib.activate.nixos self.nixosConfigurations.myServer;
       user = "root"
     };
   };
@@ -306,6 +316,14 @@ To enable it on a specific host:
 ```nix
 {pkgs,...}: {
   # ... other host configurations ...
+  deployment.myServer = {
+    hostname = "0.0.0.0";
+    profiles.system = {
+      sshUser = "example";
+      path = deploy-rs.lib.activate.nixos self.nixosConfigurations.myServer;
+      user = "root"
+    };
+  };
   environment.systemPackages = [
     # ... other systemPackages ...
     inputs.deploy-rs.defaultPackage.${pkgs.system}
@@ -394,6 +412,21 @@ To enable it:
 ```
 
 This avoids installing PostgreSQL migration tooling on machines that don't use PostgreSQL.
+
+---
+
+## 📚 Documentation
+
+Full documentation is available in the `/docs/` directory:
+
+- Architecture
+- Modules
+- Users
+- Hosts
+- Web stack
+- PostgreSQL
+- Deployment
+- Migration scripts
 
 ---
 
