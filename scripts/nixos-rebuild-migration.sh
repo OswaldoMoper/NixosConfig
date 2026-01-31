@@ -34,7 +34,7 @@ perform_migration() {
 
   log "INFO: Restore completed..."
   rm -f $USER_HOME/backups/postgres_backup.sql
-  psql -U analyzer -d aanalyzer_yesod -c '\dt'
+  # psql -d ${TARGET_USER} -c '\dt' # refactor this
   log "INFO: PostgreSQL migration script executed. Backup directory: $USER_HOME/postgres_backup_local.sql"
 }
 
