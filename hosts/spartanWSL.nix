@@ -25,7 +25,7 @@ in
           name = "OswaldoMoper";
         };
       };
-      vscode.enable = true;
+      vscode.enable = false;
     };
   };
   # Web Hosting Service
