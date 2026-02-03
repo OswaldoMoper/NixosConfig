@@ -50,7 +50,7 @@ postgresql.initialSetup = {
 
 When enabled, the module:
 
-- Creates the role if it does not exist
+- Creates the role if it doesn't exist
 - Sets the password using the provided file
 - Creates the database
 - Grants privileges
@@ -59,9 +59,9 @@ When enabled, the module:
 
 If `initialSetup.enable = true`, then:
 
-- `role` must not be empty
-- `passwordFile` must not be null
-- `database` must not be empty
+- `role` mustn't be empty
+- `passwordFile` mustn't be null
+- `database` mustn't be empty
 
 These are enforced via Nix assertions.
 
