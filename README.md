@@ -5,8 +5,6 @@
 
 Modular, multiuser, multiapp and multihost configuration for NixOS (also NixOS-WSL); reproducible, extensible and maintainable in one branch.
 
----
-
 - [🔍 General description](#-general-description)
 - [🏎️ Quick Start (WSL)](#️-quick-start-wsl)
 - [🏎️ Quick Start (Pure NixOS)](#️-quick-start-pure-nixos)
@@ -22,8 +20,6 @@ Modular, multiuser, multiapp and multihost configuration for NixOS (also NixOS-W
 - [🧠 Notes](#-notes)
 - [⚖️ License](#️-license)
 
----
-
 ## 🔍 General description
 
 This repository defines a universal architecture for multiple NixOS systems management in one flake:
@@ -35,8 +31,6 @@ This repository defines a universal architecture for multiple NixOS systems mana
 - **One Branch**: all the hosts are built from the same base
 
 The objective is to allow each host to declare only the essentials, while the rest is configured automatically
-
----
 
 ## 🏎️ Quick Start (WSL)
 
@@ -74,8 +68,6 @@ For more detailed instructions, [refer to the documentation](https://nix-communi
 
 For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) base image, refer to the official project.
 
----
-
 ## 🏎️ Quick Start (Pure NixOS)
 
 1. Install NixOS from an official ISO: <https://nixos.org/download>
@@ -104,8 +96,6 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
      sudo reboot now
    ```
 
----
-
 ## ⚙️ Project structure
 
 ``` markdown
@@ -131,8 +121,6 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
     ├── motorsport.nix  ← Not included yet
     └── default.nix     ← Not included yet
 ```
-
----
 
 ## 👤 Declaring users
 
@@ -177,8 +165,6 @@ This activates:
 - VSCode
 - Declarative config per user
 
----
-
 ## 🖥️ Declaring hosts
 
 Each file on `hosts/` represents a machine:
@@ -186,7 +172,7 @@ Each file on `hosts/` represents a machine:
 ```Nix
 { pkgs, ... }: {
   # This repository doesn't include hardware configs
-  imports = [ ./hosts/hardware/configuration.nix ];
+  imports = [ ./hardware/configuration.nix ];
 
   # You can ignore this attribute and nixos will use the filename
   networking.hostName = "spartanWSL";
@@ -198,8 +184,6 @@ Each file on `hosts/` represents a machine:
 ```
 
 The flake automatically detects all hosts in the `hosts/` directory.
-
----
 
 ## 🧩 Declaring apps
 
@@ -218,12 +202,26 @@ If the app is a web app that you are going to host, define the following in the 
 ```Nix
 {pkgs, ... }: {
   # ... other host configurations ...
+  webStack.enable = true;
+  webStack.email = "example@mail.com";
+  webStack.manager = "admin";
   webStack.apps = [
     {
       name = "nixTalk";
       domain = "nixTalk.oswaldomoper.com";
       port = 2000;
-      static = "/home/<user>/nixTalk/static";
+      environment = {
+        nixTalk_STATIC     = "/home/<name>/nixTalk/static";
+        nixTalk_PORT       = "2000";
+        nixTalk_UPLOAD     = "/home/<name>/upload";
+        nixTalk_APPROOT    = "https://nixTalk.oswaldomoper.com";
+        nixTalk_PGUSER     = "a postgres user";
+        nixTalk_PGPASS     = "a secretly cripted password";
+        nixTalk_PGHOST     = "localhost or your db host";
+        nixTalk_PGPORT     = "5432 or the port you use";
+        nixTalk_PGDATABASE = "nixTalk or the name of your database";
+        nixTalk_PGPOOLSIZE = "10";
+      };
       package = inputs.nixTalk.packages.${pkgs.system}.nixTalk-wrapper;
     }
   ];
@@ -231,7 +229,25 @@ If the app is a web app that you are going to host, define the following in the 
 }
 ```
 
----
+When `webStack.enable = true`
+
+- `webStack.email` must be non-empty
+- `webStack.apps` must contain at leat one app
+
+and the module automatically:
+
+- enables Nginx
+- creates one virtualHost per app
+- configures ACME certificates when `mode = "nginx"`
+- configures Cloudflare Tunnel when `mode = "tunnel"`
+- creates one systemd service per app
+- injects the `environment` variables into the service
+
+**NOTES:**
+
+- `webStack.apps.[*].environment` accepts strings, paths, packages and null values (same type as `systemd.services.<name>.environment`).
+- `webStack.apps.[*].port` values must be unique
+- `webStack.mode` controls how apps are exposed: `"nginx"` for direct HTTPS with ACME, `"tunnel"` for Cloudflare Tunnel (default)
 
 ## 🚀 Deploying to remote servers (deploy-rs)
 
@@ -268,7 +284,7 @@ Inside the host file:
 nix run .#deploy -- --hostname myServer
 ```
 
-or 
+or
 
 ```bash
 deploy -- --hostname myServer
@@ -279,8 +295,6 @@ This will:
 - build the system
 - upload the closure
 - activate the new configuration
-
----
 
 ## 🐘 PostgreSQL migration (deploy-migration)
 
@@ -301,7 +315,7 @@ This flake includes a helper script that performs safe PostgreSQL migrations dur
 nix run .#deploy-migration -- myServer
 ```
 
-or 
+or
 
 ```bash
 deploy-migration -- myServer
@@ -336,8 +350,6 @@ To enable it on a specific host:
 
 This keeps deployment tooling out of machines that don't need it (e.g. laptops, WSL, development hosts).
 
----
-
 ## 🔧 System rebuild
 
 The very first rebuild run
@@ -351,8 +363,6 @@ Example
 ```bash
   sudo nixos-rebuild switch --flake .#spartanWSL
 ```
-
----
 
 ## 🐘 PostgreSQL migration (nixos-rebuild-migration)
 
@@ -413,22 +423,19 @@ To enable it:
 
 This avoids installing PostgreSQL migration tooling on machines that don't use PostgreSQL.
 
----
-
 ## 📚 Documentation
 
-Full documentation is available in the `/docs/` directory:
+Full documentation is available in the [`/docs/`](./docs/) directory:
 
-- Architecture
-- Modules
-- Users
-- Hosts
-- Web stack
-- PostgreSQL
-- Deployment
-- Migration scripts
-
----
+- [Architecture](./docs/architecture.md)
+- [Common Modules](./docs/modules/common.md)
+- [Users](./docs/modules/user.md)
+- [Graphical configuration](./docs/modules/graphical.md)
+- [Hosts](./docs/hosts.md)
+- [Web stack](./docs/modules/webstack.md)
+- [PostgreSQL](./docs/modules/postgresql.md)
+- [Deployment](./docs/modules/deployment.md)
+- [Migration scripts](./docs/scripts/)
 
 ## 🧠 Notes
 
@@ -439,8 +446,6 @@ This repository is designed to:
 - Enable declarative users with integrated Home Manager
 - Avoid duplication across hosts
 - Enable modular growth (roles, profiles, services, etc.)
-
----
 
 ## ⚖️ License
 

@@ -3,6 +3,16 @@
 let home = "/home/omoper";
 in
 {
+  # dummy deploy example
+  deploy.nodes.exampleServer = {
+    hostname = "0.0.0.0";
+    fastConnection = false;
+    profiles.system = {
+      sshUser = "example";
+      path = inputs.deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.exampleServer;
+      user = "root";
+    };
+  };
   myUsers.omoper = {
     enable = true;
     fullName = "Oswaldo Moper";
@@ -39,15 +49,23 @@ in
         name = "nixTalk";
         domain = "nixTalk.oswaldomoper.com";
         port = 2000;
-        static = "${home}/nixTalk/static";
         package = inputs.nixTalk.packages.${pkgs.system}.nixTalk-wrapper;
+        environment = {
+          YESOD_STATIC_DIR = "${home}/nixTalk/static";
+          YESOD_PORT       = "2000";
+          YESOD_APPROOT    = "https://nixTalk.oswaldomoper.com";
+        };
       }
       {
         name = "oswaldomoper";
         domain = "oswaldomoper.com";
         port = 2001;
-        static = "${home}/oswaldomoper.com/static";
         package = inputs.moper.packages.${pkgs.system}.oswaldomoper-wrapper;
+        environment = {
+          YESOD_STATIC_DIR = "${home}/oswaldomoper.com/static";
+          YESOD_PORT       = "2001";
+          YESOD_APPROOT    = "https://oswaldomoper.com";
+        };
       }
     ];
   };

@@ -3,7 +3,7 @@
 let 
   inherit (lib) mkIf mkOption mkEnableOption types listToAttrs mkMerge;
   cfg = config.webStack;
-  yesodApp = types.submodule {
+  webApp = types.submodule {
     options = {
       name = mkOption {
         type = types.str;
@@ -17,13 +17,18 @@ let
         type = types.port;
         description = "Internal port the app listens on";
       };
-      static = mkOption {
-        type = types.str;
-        description = "Static directory for the app";
-      };
       package = mkOption {
         type = types.package;
         description = "Wrapped executable package for the app";
+      };
+      environment = mkOption {
+        type = types.attrsOf (types.nullOr (types.oneOf [
+          types.str
+          types.path
+          types.package
+        ]));
+        default = {};
+        description = "Environment variables for the app (same type as systemd.services.environment)";
       };
     };
   };
@@ -55,7 +60,7 @@ in
         description = "ACME and webStack notifications";
       };
       apps = mkOption {
-        type = types.listOf yesodApp;
+        type = types.listOf webApp;
         default = [];
         description = "List of web apps";
       };
@@ -86,17 +91,18 @@ in
 
       services.nginx = {
         enable = true;
-        virtualHosts = lib.listToAttrs (map (app: {
-          name = app.domain;
-          value = {
-            enableACME = (cfg.mode == "nginx");
-            forceSSL = (cfg.mode == "nginx");
-            locations."/" = {
-              proxyPass = "http://localhost:${toString app.port}";
-              proxyWebsockets = true;
+        virtualHosts =
+          (lib.listToAttrs (map (app: {
+            name = app.domain;
+            value = {
+              enableACME = (cfg.mode == "nginx");
+              forceSSL = (cfg.mode == "nginx");
+              locations."/" = {
+                proxyPass = "http://localhost:${toString app.port}";
+                proxyWebsockets = true;
+              };
             };
-          };
-        }) cfg.apps);
+          }) cfg.apps));
       };
 
       services.cloudflared = mkIf (cfg.mode == "tunnel") {
@@ -112,26 +118,21 @@ in
         };
       };
 
-      systemd.services = listToAttrs (
+      systemd.services = (listToAttrs (
         (map (app: {
           name = app.name;
           value = {
             description = "${app.name} web";
             after = [ "network.target" ];
             wantedBy = [ "multi-user.target" ];
-            environment = {
-              YESOD_STATIC_DIR = "${app.static}";
-              YESOD_PORT = toString app.port;
-              YESOD_APPROOT = "https://${app.domain}";
-            };
+            environment = app.environment;
             serviceConfig = {
               User = cfg.manager;
-              WorkingDirectory = app.static;
               ExecStart = "${app.package}/bin/${app.name}-wrapped --verbose";
               Restart = "always";
             };
           };
-        }) cfg.apps)
+        }) cfg.apps))
       );
     };
   }

@@ -198,7 +198,18 @@ in {
         name = "nixTalk";
         domain = "nixTalk.oswaldomoper.com";
         port = 2000;
-        static = "${home}/nixTalk/static";
+        environment = {
+          nixTalk_STATIC     = "${home}/nixTalk/static";
+          nixTalk_PORT       = "2000";
+          nixTalk_UPLOAD     = "${home}/upload";
+          nixTalk_APPROOT    = "https://nixTalk.oswaldomoper.com";
+          nixTalk_PGUSER     = "omoper";
+          nixTalk_PGPASS     = "a secretly cripted password";
+          nixTalk_PGHOST     = "localhost";
+          nixTalk_PGPORT     = "5432";
+          nixTalk_PGDATABASE = "nixTalk";
+          nixTalk_PGPOOLSIZE = "10";
+        };
         package = inputs.nixTalk.packages.${pkgs.system}.nixTalk-wrapper;
       }
     ];
@@ -221,6 +232,7 @@ in {
   environment.systemPackages = [
     inputs.deploy-rs.defaultPackage.${pkgs.system}
     self.packages.${pkgs.system}.deploy-migration
+    self.packages.${pkgs.system}.nixos-rebuild-migration
   ];
 }
 ```
@@ -268,7 +280,18 @@ Servers typically enable:
         name = "nixTalk";
         domain = "domain.com";
         port = 2000;
-        static = "/home/example/nixTalk/static";
+        environment = {
+          nixTalk_STATIC     = "/home/example/nixTalk/static";
+          nixTalk_PORT       = "2000";
+          nixTalk_UPLOAD     = "/home/example/upload";
+          nixTalk_APPROOT    = "https://domain.com";
+          nixTalk_PGUSER     = "omoper";
+          nixTalk_PGPASS     = "a secretly cripted password";
+          nixTalk_PGHOST     = "localhost";
+          nixTalk_PGPORT     = "5432";
+          nixTalk_PGDATABASE = "nixTalk";
+          nixTalk_PGPOOLSIZE = "10";
+        };
         package = inputs.nixTalk.packages.${pkgs.system}.nixTalk-wrapper;
       }
     ];
@@ -279,6 +302,9 @@ Servers typically enable:
     dumpFile = "/home/example/postgres_backup_local.sql";
   };
   networking.firewall.allowedTCPPorts = [ 22 80 5432 ];
+  environment.systemPackages = [
+    self.packages.${pkgs.system}.nixos-rebuild-migration
+  ];
 }
 ```
 
@@ -321,7 +347,18 @@ Servers typically enable:
         name = "nixTalk";
         domain = "nixTalk.oswaldomoper.com";
         port = 2000;
-        static = "/home/omoper/nixTalk/static";
+        environment = {
+          nixTalk_STATIC     = "/home/omoper/nixTalk/static";
+          nixTalk_PORT       = "2000";
+          nixTalk_UPLOAD     = "/home/omoper/upload";
+          nixTalk_APPROOT    = "https://nixTalk.oswaldomoper.com";
+          nixTalk_PGUSER     = "omoper";
+          nixTalk_PGPASS     = "a secretly cripted password";
+          nixTalk_PGHOST     = "localhost";
+          nixTalk_PGPORT     = "5432";
+          nixTalk_PGDATABASE = "nixTalk";
+          nixTalk_PGPOOLSIZE = "10";
+        };
         package = inputs.nixTalk.packages.${pkgs.system}.nixTalk-wrapper;
       }
     ];
@@ -343,6 +380,7 @@ Servers typically enable:
   environment.systemPackages = [
     inputs.deploy-rs.defaultPackage.${pkgs.system}
     self.packages.${pkgs.system}.deploy-migration
+    self.packages.${pkgs.system}.nixos-rebuild-migration
   ];
 }
 ```
