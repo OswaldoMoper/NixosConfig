@@ -1,13 +1,13 @@
 # webstack — Web Hosting Stack
 
-This module provides a unified interface for hosting web applications on NixOS. It supports both pure nginx hosting and nginx + Cloudflare Tunnel hosting, with automatic ACME certificates and per-application systemd services.
+This module provides a unified interface for hosting web applications on NixOS. It supports both pure Nginx hosting and Nginx + Cloudflare Tunnel hosting, with automatic ACME certificates and per-application systemd services.
 
 ## Purpose
 
 - Provide a declarative hosting stack for Yesod and other web apps
-- Avoid duplicating nginx or cloudflared configuration across hosts
+- Avoid duplicating Nginx or cloudflared configuration across hosts
 - Automatically generate systemd services per app
-- Support both public nginx hosting and Cloudflare Tunnel hosting
+- Support both public Nginx hosting and Cloudflare Tunnel hosting
 - Ensure safe defaults (ACME, SSL, unique ports)
 
 This module activates only when `webStack.enable = true`.
@@ -16,7 +16,7 @@ This module activates only when `webStack.enable = true`.
 
 ### `"nginx"`
 
-- nginx is enabled (always)
+- Nginx is enabled (always)
 - ACME certificates are enabled
 - HTTPS is enforced
 - Each app gets a virtualHost with SSL
@@ -26,7 +26,7 @@ Use this mode for public-facing servers with direct internet access.
 
 ### `"tunnel"`
 
-- nginx is still enabled (reverse proxy)
+- Nginx is still enabled (reverse proxy)
 - ACME is disabled (Cloudflare handles TLS)
 - Cloudflare Tunnel is enabled
 - Each app gets an ingress rule
@@ -84,8 +84,10 @@ List of applications to host. Each app has:
   name = "myapp";
   domain = "myapp.example.com";
   port = 3000;
-  static = "/path/to/static";
   package = inputs.myapp.packages.${pkgs.system}.myapp-wrapper;
+  environment = {
+    # ... Environment variables ...
+  }
 }
 ```
 
@@ -99,9 +101,9 @@ The module enforces:
 
 These are implemented via Nix assertions.
 
-## nginx Hosting (always enabled)
+## Nginx Hosting (always enabled)
 
-nginx is always enabled when `webStack.enable = true`. Each app gets a virtualHost:
+Nginx is always enabled when `webStack.enable = true`. Each app gets a virtualHost:
 
 ```nix
 services.nginx.virtualHosts.<domain> = {
@@ -124,25 +126,25 @@ When `mode = "tunnel"`:
 - ACME is disabled
 `HTTPS is not forced (Cloudflare handles TLS)
 
-## Clodflare Tunnel Hosting
+## Cloudflare Tunnel Hosting
 
 When  `mode = "tunnel"`:
 
-- nginx is still enabled (reverse proxy)
+- Nginx is still enabled (reverse proxy)
 - ACME is disabled
 - Cloudflare Tunnel is enabled
 
-```Nix
-services.cloudflared.tunnels.<tunnelName> = {
-  credentialsFile = cfg.tunnelCredentials;
-  ingress = {
-    <domain> = "http://localhost:<port>";
+  ```Nix
+  services.cloudflared.tunnels.<tunnelName> = {
+    credentialsFile = cfg.tunnelCredentials;
+    ingress = {
+      <domain> = "http://localhost:<port>";
+    };
+    default = "http_status:404";
   };
-  default = "http_status:404";
-};
-```
+  ```
 
-TLS termination happens at Cloudflare.
+- TLS termination happens at Cloudflare.
 
 ## Systemd Services
 
@@ -150,15 +152,12 @@ Each app generates a systemd service:
 
 - Name: `app.name`
 - User: `webStack.manager`
-- Environment variables:
-  - `YESOD_STATIC_DIR`
-  - `YESOD_PORT`
-  - `YESOD_APPROOT`
+- Environment variables: `app.environment`
 - ExecStart:
 
-```Nix
-${app.package}/bin/${app.name}-wrapped --verbose
-```
+  ```Nix
+  ${app.package}/bin/${app.name}-wrapped --verbose
+  ```
 
 - Restart policy: `always`
 
@@ -170,7 +169,7 @@ systemctl status nixTalk
 
 ## Examples
 
-### Cloudflare Tunnel Hosting
+### Cloudflare Tunnel Hosting Mode
 
 ```Nix
 {pkgs, ...}: {
@@ -187,7 +186,21 @@ systemctl status nixTalk
         name = "nixTalk";
         domain = "nixTalk.oswaldomoper.com";
         port = 2000;
-        static = "/home/omoper/nixTalk/static";
+        environment = {
+          # ... other environment variables ...
+          nixTalk_STATIC     = "/home/omoper/nixTalk/static";
+          nixTalk_PORT       = "2000";
+          nixTalk_UPLOAD     = "/home/omoper/upload";
+          nixTalk_APPROOT    = "https://nixTalk.oswaldomoper.com";
+          # if your app use postgres
+          nixTalk_PGUSER     = "omoper";
+          nixTalk_PGPASS     = "your password";
+          nixTalk_PGHOST     = "localhost"; # or your dbhost
+          nixTalk_PGPORT     = "5432"; # or the port you use
+          nixTalk_PGDATABASE = "nixTalk";
+          nixTalk_PGPOOLSIZE = "10";
+          # ... other environment variables ...
+        };
         package = inputs.nixTalk.packages.${pkgs.system}.nixTalk-wrapper;
       }
     ];
@@ -196,7 +209,7 @@ systemctl status nixTalk
 }
 ```
 
-### nginx hosting
+### Nginx Hosting Mode
 
 ```Nix
 {pkgs, ...}: {
@@ -212,7 +225,21 @@ systemctl status nixTalk
         name = "myapp";
         domain = "myapp.example.com";
         port = 3000;
-        static = "/home/admin/myapp/static";
+        environment = {
+          # ... other environment variables ...
+          example_STATIC     = "/home/admin/example/static";
+          example_UPLOAD     = "/home/admin/upload";
+          example_PORT       = "3000";
+          example_APPROOT    = "https://myapp.example.com";
+          # if your app use postgres
+          example_PGUSER     = "your postgres user";
+          example_PGPASS     = "your password";
+          example_PGHOST     = "localhost"; # or your dbhost
+          example_PGPORT     = "5432"; # or the port you use
+          example_PGDATABASE = "your database name";
+          example_PGPOOLSIZE = "10";
+          # ... other environment variables ...
+        };
         package = inputs.myapp.packages.${pkgs.system}.myapp-wrapper;
       }
     ];
