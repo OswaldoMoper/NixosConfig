@@ -1,4 +1,4 @@
-{ config, pkgs, lib, ... }:
+{ config, pkgs, lib, inputs, ... }:
 
 let 
   inherit (lib) mkIf mkOption mkEnableOption types listToAttrs mkMerge;
@@ -29,6 +29,14 @@ let
         ]));
         default = {};
         description = "Environment variables for the app (same type as systemd.services.environment)";
+      };
+      path = mkOption {
+        type = listOf (types.oneOf [
+          types.path
+          types.str
+        ]);
+        default = [];
+        description = "Packages added to the app's 'PATH' environment variable. Both the 'bin' and 'sbin' subdirectories of each package are added.";
       };
     };
   };
@@ -126,6 +134,7 @@ in
             after = [ "network.target" ];
             wantedBy = [ "multi-user.target" ];
             environment = app.environment;
+            path = app.path;
             serviceConfig = {
               User = cfg.manager;
               ExecStart = "${app.package}/bin/${app.name}-wrapped --verbose";
