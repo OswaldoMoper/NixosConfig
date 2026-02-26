@@ -31,7 +31,7 @@ let
         description = "Environment variables for the app (same type as systemd.services.environment)";
       };
       path = mkOption {
-        type = listOf (types.oneOf [
+        type = types.listOf (types.oneOf [
           types.path
           types.str
         ]);
