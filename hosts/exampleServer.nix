@@ -36,7 +36,6 @@
         name = "nixTalk";
         domain = "domain.com";
         port = 2000;
-        static = "/home/example/nixTalk/static";
         package = inputs.nixTalk.packages.${pkgs.system}.nixTalk-wrapper;
       }
     ];
