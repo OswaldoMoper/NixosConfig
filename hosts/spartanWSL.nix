@@ -57,12 +57,12 @@ in
         };
       }
       {
-        name = "oswaldomoper";
+        name = "blog";
         domain = "oswaldomoper.com";
         port = 2001;
-        package = inputs.moper.packages.${pkgs.system}.oswaldomoper-wrapper;
+        package = inputs.moper.packages.${pkgs.system}.blog-wrapper;
         environment = {
-          YESOD_STATIC_DIR = "${home}/oswaldomoper.com/static";
+          YESOD_STATIC_DIR = "${home}/blog/static";
           YESOD_PORT       = "2001";
           YESOD_APPROOT    = "https://oswaldomoper.com";
         };
