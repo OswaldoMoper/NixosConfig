@@ -9,10 +9,7 @@
     };
     flake-utils.url = "github:numtide/flake-utils";
     nixTalk.url = "github:OswaldoMoper/nixTalk";
-    moper = {
-      type = "path";
-      path = "/home/omoper/oswaldomoper.com";
-    };
+    moper.url = "github:OswaldoMoper/blog";
     deploy-rs = {
       url = "github:serokell/deploy-rs";
       inputs.nixpkgs.follows = "nixpkgs";
