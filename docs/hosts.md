@@ -22,7 +22,7 @@ Everything else is handled by the shared modules in `nixosModules/`.
 
 The flake automatically loads **every `.nix` file** inside `hosts/`:
 
-```nix
+```markdown
 hosts/
 ├── spartanWSL.nix
 ├── exampleServer.nix
@@ -41,7 +41,7 @@ No manual editing of `flake.nix` is required.
 
 Each physical NixOS machine requires a hardware configuration file. This file is generated automatically by the installer using:
 
-```bash
+```Shell
 nixos-generate-config
 ```
 
@@ -53,7 +53,7 @@ This produces two files:
 Only **hardware-configuration.nix** is machine-specific.
 In this repository, hardware files live under:
 
-```Code
+```Markdown
 hosts/hardware/<name>.nix
 ```
 
@@ -69,14 +69,14 @@ hosts/hardware/<name>.nix
 1. Install NixOS normally
 2. Copy the generated hardware file:
 
-   ```bash
+   ```Shell
    sudo cp /etc/nixos/hardware-configuration.nix \
      /path/to/repo/hosts/hardware/<hostname>.nix
    ```
 
 3. Import it inside the host file:
 
-   ```bash
+   ```nix
    {
      # ... other host configurations ...
      imports = [
@@ -158,13 +158,13 @@ WSL hosts typically enable:
 
 let home = "/home/omoper";
 in {
-  deployment.Server = {
-    hostname = "example.com";
-    profiles.system = {
-      sshUser = "omoper";
-      user = "root";
-      path = deploy-rs.lib.activate.nixos self.nixosConfigurations.Server;
-    };
+  wsl = {
+    enable = true;
+    defaultUser = "omoper";
+  };
+  graphical = {
+    enable = true;
+    mode = "WSL";
   };
   myUsers.omoper = {
     enable = true;
@@ -187,7 +187,23 @@ in {
       vscode.enable = false;
     };
   };
+  environment.systemPackages = [
+    # ... other pkgs
+    inputs.deploy-rs.defaultPackage.${pkgs.system}
+    self.packages.${pkgs.system}.deploy-migration
+    self.packages.${pkgs.system}.nixos-rebuild-migration
+  ];
 
+  # Optional
+  deployment.Server = {
+    hostname = "example.com";
+    profiles.system = {
+      sshUser = "omoper";
+      user = "root";
+      path = deploy-rs.lib.activate.nixos self.nixosConfigurations.Server;
+    };
+  };
+  # Optional
   webStack = {
     enable = true;
     email = "omoper@example.com";
@@ -214,26 +230,11 @@ in {
       }
     ];
   };
-
+  # Optional
   postgresql = {
     enable = true;
     dumpFile = "${home}/postgres_backup_local.sql";
   };
-
-  graphical = {
-    enable = true;
-    mode = "WSL";
-  };
-
-  wsl = {
-    enable = true;
-    defaultUser = "omoper";
-  };
-  environment.systemPackages = [
-    inputs.deploy-rs.defaultPackage.${pkgs.system}
-    self.packages.${pkgs.system}.deploy-migration
-    self.packages.${pkgs.system}.nixos-rebuild-migration
-  ];
 }
 ```
 

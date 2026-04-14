@@ -17,7 +17,7 @@ $HOME/deploy_migration.log
 
 This script is intended to be run locally:
 
-```bash
+```Shell
 deploy-migration .#myServer
 ```
 
@@ -42,7 +42,7 @@ These values are obtained using:
 
 The script runs on the remote server:
 
-```bash
+```Shell
 pg_dumpall -U postgres > $REMOTE_HOME/backups/postgres_deploy_backup.sql
 ```
 
@@ -52,7 +52,7 @@ If this fails, the deployment is aborted.
 
 The backup is copied to:
 
-```bash
+```Shell
 $HOME/postgres_backup_<APP>.sql
 ```
 
@@ -62,7 +62,7 @@ This ensures a local copy exists even if the remote restore fails.
 
 The script executes:
 
-```bash
+```Shell
 deploy .#<TARGET>
 ```
 
@@ -83,7 +83,7 @@ If a version upgrade is detected:
 
 - The backup is restored on the remote server:
 
-```bash
+```Shell
 psql -U postgres < postgres_deploy_backup.sql
 ```
 
@@ -95,13 +95,13 @@ Temporary remote backup files are deleted.
 
 The script uses:
 
-```bash
+```Shell
 set -e
 ```
 
 and explicit error blocks:
 
-```bash
+```Shell
 || { log "ERROR: ..."; exit 1 }
 ```
 
@@ -117,7 +117,7 @@ Failures in any of these steps abort the migration:
 
 All actions are logged with timestamps to:
 
-```bash
+```Shell
 $HOME/deploy_migration.log
 ```
 
@@ -148,7 +148,7 @@ Do **not** use it for:
 
 ## Example
 
-```bash
+```Shell
 deploy-migration .#hetzner
 ```
 

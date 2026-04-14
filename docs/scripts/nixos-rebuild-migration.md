@@ -4,7 +4,7 @@ This script extends `nixos-rebuild` with automatic PostgreSQL backup, version de
 
 All operations are logged to:
 
-```bash
+```Shell
 $HOME/postgres_migration.log
 ```
 
@@ -19,7 +19,7 @@ $HOME/postgres_migration.log
 
 This script is intended to be run locally:
 
-```bash
+```Shell
 sudo nixos-rebuild-migration switch
 ```
 
@@ -38,7 +38,7 @@ If the home directory is invalid, the script aborts.
 
 The script runs:
 
-```bash
+```Shell
 psql --version
 ```
 
@@ -48,13 +48,13 @@ If this fails, the rebuild is aborted.
 
 A full backup is created in:
 
-```bash
+```Shell
 $USER_HOME/backups/postgres_backup.sql
 ```
 
 using:
 
-```bash
+```Shell
 pg_dumpall -U postgres
 ```
 
@@ -64,7 +64,7 @@ If this fails, the rebuild is aborted.
 
 The backup is duplicated to:
 
-```bash
+```Shell
 $USER_HOME/postgres_backup_local.sql
 ```
 
@@ -74,7 +74,7 @@ This ensures a safe copy exists even if the restore fails.
 
 The script executes:
 
-```bash
+```Shell
 nixos-rebuild <original arguments>
 ```
 
@@ -84,7 +84,7 @@ If the rebuild fails, the migration is canceled.
 
 If PostgreSQL is not active after the rebuild, the script attempts:
 
-```bash
+```Shell
 systemctl restart postgresql
 ```
 
@@ -111,13 +111,13 @@ If the restore fails, the script aborts.
 
 The script uses:
 
-```bash
+```Shell
 set -e
 ```
 
 and explicit error blocks:
 
-```bash
+```Shell
 || { log "ERROR: ..."; exit 1 }
 ```
 
@@ -135,7 +135,7 @@ Failures in any of these steps abort the migration:
 
 All actions are logged with timestamps to:
 
-```bash
+```Shell
 $HOME/postgres_migration.log
 ```
 
@@ -164,7 +164,7 @@ Do **not** use it for:
 
 ## Example
 
-```bash
+```Shell
 sudo nixos-rebuild-migration switch
 ```
 

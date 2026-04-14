@@ -163,7 +163,7 @@ Each app generates a systemd service:
 
 Example:
 
-```bash
+```Shell
 systemctl status nixTalk
 ```
 

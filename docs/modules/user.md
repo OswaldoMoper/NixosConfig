@@ -75,7 +75,7 @@ When `home.enable = true`, the module:
 
 Profiles must be stored in:
 
-```code
+```Markdown
 hmProfiles/<profile>.nix
 ```
 

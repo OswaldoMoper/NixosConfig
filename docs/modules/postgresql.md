@@ -75,7 +75,7 @@ postgresql.dumpFile = "/path/to/dump.sql";
 
 This generates an `initialScript` that runs:
 
-```code
+```psql
 \i /path/to/dump.sql
 ```
 
@@ -116,7 +116,7 @@ postgresql.tcp.enable = true;
 
 Controls:
 
-```Code
+```Nix
 services.postgresql.enableTCPIP
 ```
 
@@ -128,7 +128,7 @@ postgresql.logStatements = "all" | "mod" | "none";
 
 Controls:
 
-```Code
+```nix
 settings.log_statement
 ```
 
