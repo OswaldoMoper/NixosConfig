@@ -1033,11 +1033,11 @@
         ]
       },
       "locked": {
-        "lastModified": 1775877393,
-        "narHash": "sha256-yUHn0krIuVKO1cGe/KQI61Tkhuibc0yJ72iYPLY2g4s=",
+        "lastModified": 1776875127,
+        "narHash": "sha256-Y98WUtr59KLFCpbk2aqVJWzHmvUrwQ8+s3YQ2XPWv7E=",
         "owner": "OswaldoMoper",
         "repo": "blog",
-        "rev": "c25af5d4c9874a5eef241fb0beab60beff14921b",
+        "rev": "650854c84c6adfc182bb7e02a527028aaab97213",
         "type": "github"
       },
       "original": {

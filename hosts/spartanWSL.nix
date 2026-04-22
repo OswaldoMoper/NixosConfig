@@ -4,7 +4,7 @@ let home = "/home/omoper";
 in
 {
   # dummy deploy example
-  deploy.nodes.exampleServer = {
+  deployment.nodes.exampleServer = {
     hostname = "0.0.0.0";
     fastConnection = false;
     profiles.system = {
