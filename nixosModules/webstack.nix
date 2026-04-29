@@ -3,6 +3,21 @@
 let 
   inherit (lib) mkIf mkOption mkEnableOption types listToAttrs mkMerge;
   cfg = config.webStack;
+
+  resolvePackage = app:
+    if lib.isDerivation app.package
+    then app.package
+    else if (lib.isAttrs app.package  && app.package ? packages)
+    then
+      let
+        system = pkgs.stdenv.hostPlatform.system;
+        wrapperName = "${app.name}-wrapper";
+      in
+        app.package.packages.${system}.${wrapperName}
+        or app.package.packages.${system}.${app.name}
+        or (throw "Package '${app.name}' or '${wrapperName}' was not fount in the input of ${app.name}")
+    else throw "The value provided in 'package' for ${app.name} is not valid.";
+
   webApp = types.submodule {
     options = {
       name = mkOption {
@@ -18,8 +33,8 @@ let
         description = "Internal port the app listens on";
       };
       package = mkOption {
-        type = types.package;
-        description = "Wrapped executable package for the app";
+        type = types.oneOf [ types.package types.attrs ];
+        description = "Derivation or Flake Input from which to extract the app wrapper";
       };
       environment = mkOption {
         type = types.attrsOf (types.nullOr (types.oneOf [
@@ -127,7 +142,9 @@ in
       };
 
       systemd.services = (listToAttrs (
-        (map (app: {
+        (map (app:
+        let pkg = resolvePackage app;
+        in {
           name = app.name;
           value = {
             description = "${app.name} web";
@@ -137,7 +154,7 @@ in
             path = app.path;
             serviceConfig = {
               User = cfg.manager;
-              ExecStart = "${app.package}/bin/${app.name}-wrapped --verbose";
+              ExecStart = "${pkg}/bin/${app.name}-wrapped --verbose";
               Restart = "always";
             };
           };
