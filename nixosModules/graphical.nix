@@ -51,8 +51,8 @@ in
     programs.light.enable = isGraphical;
     programs.nix-ld = {
         enable = isWSL;
-        package = pkgs.nix-ld-rs;
-      };
+        package = pkgs.nix-ld;
+    };
     fonts.packages = mkIf isGraphical (map (f: pkgs.${f}) cfg.fonts);
     services.pipewire = {
       enable = isGraphical;
