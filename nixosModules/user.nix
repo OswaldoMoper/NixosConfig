@@ -149,15 +149,17 @@ in
       ];
       programs.ssh = {
         enable = true;
-        extraConfig = ''
-          AddKeysToAgent yes
-            ${optionalString cfg.home.sshKeys.enable ''
-            IdentityFile ~/.ssh/${cfg.home.sshKeys.baseName.name}_ed25519
-            IdentityFile ~/.ssh/${cfg.home.sshKeys.baseName.name}
-            IdentityFile ~/.ssh/${cfg.home.sshKeys.baseName.name}_rsa
-          ''}
-          ${concatStringsSep "\n" (map (key: "IdentityFile ~/.ssh/${key}") cfg.home.sshKeys.names)}
-        '';
+        enableDefaultConfig = false;
+        matchBlocks."*" = {
+          extraOptions = {
+            "AddKeysToAgent" = "yes";
+          };
+          identityFile = [
+            "~/.ssh/${cfg.home.sshKeys.baseName.name}_ed25519"
+            "~/.ssh/${cfg.home.sshKeys.baseName.name}"
+            "~/.ssh/${cfg.home.sshKeys.baseName.name}_rsa"
+          ] ++ (map (key: "~/.ssh/${key}") cfg.home.sshKeys.names);
+        };
       };
       programs.vscode.enable = cfg.home.vscode.enable;
       imports =
