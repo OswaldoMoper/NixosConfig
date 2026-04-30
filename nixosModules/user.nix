@@ -120,12 +120,14 @@ in
       nix-ld.enable = true;
     };
     home-manager.users = mapAttrs (name: cfg: mkIf cfg.home.enable {
-      home.stateVersion = "25.05";
+      home.stateVersion = "25.11";
       services.ssh-agent.enable = cfg.home.sshKeys.enable;
       programs.git = mkIf cfg.home.git.enable {
         enable = true;
-        userName = cfg.home.git.tag;
-        userEmail = cfg.home.git.email;
+        settings.user = {
+          name = cfg.home.git.tag;
+          email = cfg.home.git.email;
+        };
       };
       home.file.".config/msmtp/config" = mkIf cfg.home.msmtp.enable {
         text = ''

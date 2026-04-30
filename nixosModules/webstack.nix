@@ -18,6 +18,18 @@ let
         or (throw "Package '${app.name}' or '${wrapperName}' was not fount in the input of ${app.name}")
     else throw "The value provided in 'package' for ${app.name} is not valid.";
 
+  mkVHost = {app, enableACME ? false}: {
+    name = app.domain;
+    value = {
+      inherit enableACME;
+      forceSSL = enableACME;
+      locations."/" = {
+        proxyPass = "http://localhost:${toString app.port}";
+        proxyWebsockets = true;
+      };
+    };
+  };
+
   webApp = types.submodule {
     options = {
       name = mkOption {
@@ -35,6 +47,11 @@ let
       package = mkOption {
         type = types.oneOf [ types.package types.attrs ];
         description = "Derivation or Flake Input from which to extract the app wrapper";
+      };
+      binaryName = mkOption {
+        type = types.str;
+        default = "";
+        description = "If default, will use '{name}-wrapped'";
       };
       environment = mkOption {
         type = types.attrsOf (types.nullOr (types.oneOf [
@@ -59,19 +76,6 @@ in
   {
     options.webStack = {
       enable = mkEnableOption "Web hosting stack";
-      mode = mkOption {
-        type = types.enum ["tunnel" "nginx"];
-        default = "tunnel";
-        description = "Hosting mode: cloudflared tunnel or pure nginx";
-      };
-      tunnelName = mkOption {
-        type = types.str;
-        default = "main";
-      };
-      tunnelCredentials = mkOption {
-        type = types.str;
-        default = "/etc/.cloudflared/uuid.json";
-      };
       manager = mkOption {
         type = types.str;
         description = "Hosting user";
@@ -82,30 +86,73 @@ in
         default = "";
         description = "ACME and webStack notifications";
       };
-      apps = mkOption {
-        type = types.listOf webApp;
-        default = [];
-        description = "List of web apps";
+
+      nginx = {
+        enable = mkEnableOption "Nginx stack";
+        apps = mkOption {
+          type = types.listOf webApp;
+          default = [];
+          description = "List of web apps";
+        };
+      };
+
+      tunnel = {
+        enable = mkEnableOption "Cloudflare Tunnels stack";
+        name = mkOption {
+          type = types.str;
+          default = "main";
+        };
+        credentials = mkOption {
+          type = types.str;
+          default = "/etc/.cloudflared/uuid.json";
+        };
+        apps = mkOption {
+          type = types.listOf webApp;
+          default = [];
+          description = "List of web apps";
+        };
+        useNginx = mkEnableOption "Use nginx proxy";
       };
     };
 
     config = mkIf cfg.enable {
-      assertions = [
-        {
-          assertion = cfg.email != "";
-          message = "webStack requires a valid email";
-        }
-        {
-          assertion = cfg.apps != [];
-          message = "webStack requires at least one app";
-        }
-        {
-          assertion =
-            builtins.length (lib.unique (map (a: a.port) cfg.apps))
-            == builtins.length cfg.apps;
-          message = "webStack apps must have unique ports";
-        }
-      ];
+      assertions = let allApps = cfg.tunnel.apps ++ cfg.nginx.apps;
+        in [
+          {
+            assertion = cfg.email != "";
+            message = "webStack requires a valid email";
+          }
+          {
+            assertion = allApps != [];
+            message = "webStack requires at least one app";
+          }
+          {
+            assertion = cfg.tunnel.enable -> cfg.tunnel.apps != [];
+            message = "webStack: Cloudflare Tunnel is enabled but no apps are defined in 'tunnel.apps'.";
+          }
+          {
+            assertion = cfg.nginx.enable -> cfg.nginx.apps != [];
+            message = "webStack: Nginx stack is enabled but no apps are defined in 'nginx.apps'.";
+          }
+          {
+            assertion =
+              builtins.length (lib.unique (map (a: a.port) (cfg.tunnel.apps ++ cfg.nginx.apps)))
+              == builtins.length allApps;
+            message = "webStack apps must have unique ports";
+          }
+          {
+            assertion = 
+              builtins.length (lib.unique (map (a: a.domain) allApps)) 
+              == builtins.length allApps;
+            message = "webStack: Each app must have a unique domain."; 
+          }
+          {
+            assertion =
+              builtins.length (lib.unique (map (a: a.name) allApps)) 
+              == builtins.length allApps;
+            message = "webStack: Each app must have a unique name.";
+          }
+        ];
 
       security.acme = {
         acceptTerms = true;
@@ -113,37 +160,32 @@ in
       };
 
       services.nginx = {
-        enable = true;
-        virtualHosts =
-          (lib.listToAttrs (map (app: {
-            name = app.domain;
-            value = {
-              enableACME = (cfg.mode == "nginx");
-              forceSSL = (cfg.mode == "nginx");
-              locations."/" = {
-                proxyPass = "http://localhost:${toString app.port}";
-                proxyWebsockets = true;
-              };
-            };
-          }) cfg.apps));
+        enable = cfg.nginx.apps != [] || (cfg.tunnel.enable && cfg.tunnel.useNginx);
+        virtualHosts = 
+          (listToAttrs (map (app: mkVHost { inherit app; enableACME = true; }) cfg.nginx.apps)) //
+          (mkIf cfg.tunnel.useNginx (listToAttrs (map (app: mkVHost { inherit app; enableACME = false; }) cfg.tunnel.apps)));
       };
 
-      services.cloudflared = mkIf (cfg.mode == "tunnel") {
+      services.cloudflared = mkIf cfg.tunnel.enable {
         enable = true;
-        tunnels.${cfg.tunnelName} = {
-          credentialsFile = cfg.tunnelCredentials;
+        tunnels.${cfg.tunnel.name} = {
+          credentialsFile = cfg.tunnel.credentials;
           ingress = 
             (lib.listToAttrs (map (app: {
               name = app.domain;
-              value = "http://localhost:${toString app.port}";
-            }) cfg.apps));
+              value = if cfg.tunnel.useNginx 
+                then "http://${app.domain}" 
+                else "http://localhost:${toString app.port}";
+            }) cfg.tunnel.apps));
           default = "http_status:404";
         };
       };
 
       systemd.services = (listToAttrs (
         (map (app:
-        let pkg = resolvePackage app;
+        let
+          pkg = resolvePackage app;
+          bin = if app.binaryName == "" then "${app.name}-wrapped" else app.binaryName;
         in {
           name = app.name;
           value = {
@@ -154,11 +196,11 @@ in
             path = app.path;
             serviceConfig = {
               User = cfg.manager;
-              ExecStart = "${pkg}/bin/${app.name}-wrapped --verbose";
+              ExecStart = "${pkg}/bin/${bin} --verbose";
               Restart = "always";
             };
           };
-        }) cfg.apps))
+        }) (cfg.tunnel.apps ++ cfg.nginx.apps)))
       );
     };
   }

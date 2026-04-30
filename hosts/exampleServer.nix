@@ -29,8 +29,8 @@
     enable = true;
     email = "example@mail.com";
     manager = "example";
-    mode = "nginx";
-    apps = [
+    nginx.enable = true;
+    nginx.apps = [
       {
         # We use nixTalk like a dummy app here
         name = "nixTalk";
