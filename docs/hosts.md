@@ -208,8 +208,9 @@ in {
     enable = true;
     email = "omoper@example.com";
     manager = "omoper";
-    tunnelCredentials = "${home}/.cloudflared/uuid.json";
-    apps = [
+    tunnel.enable = true;
+    tunnel.credentials = "${home}/.cloudflared/uuid.json";
+    tunnel.apps = [
       {
         name = "nixTalk";
         domain = "nixTalk.oswaldomoper.com";
@@ -226,7 +227,7 @@ in {
           nixTalk_PGDATABASE = "nixTalk";
           nixTalk_PGPOOLSIZE = "10";
         };
-        package = inputs.nixTalk.packages.${pkgs.system}.nixTalk-wrapper;
+        package = inputs.nixTalk;
       }
     ];
   };
@@ -275,8 +276,8 @@ Servers typically enable:
     enable = true;
     email = "example@mail.com";
     manager = "example";
-    mode = "nginx";
-    apps = [
+    nginx.enable = true;
+    nginx.apps = [
       {
         name = "nixTalk";
         domain = "domain.com";
@@ -293,7 +294,7 @@ Servers typically enable:
           nixTalk_PGDATABASE = "nixTalk";
           nixTalk_PGPOOLSIZE = "10";
         };
-        package = inputs.nixTalk.packages.${pkgs.system}.nixTalk-wrapper;
+        package = inputs.nixTalk;
       }
     ];
   };
@@ -342,8 +343,8 @@ Servers typically enable:
     enable = true;
     email = "omoper@example.com";
     manager = "omoper";
-    mode = "nginx";
-    apps = [
+    nginx.enable = true;
+    nginx.apps = [
       {
         name = "nixTalk";
         domain = "nixTalk.oswaldomoper.com";
@@ -360,7 +361,7 @@ Servers typically enable:
           nixTalk_PGDATABASE = "nixTalk";
           nixTalk_PGPOOLSIZE = "10";
         };
-        package = inputs.nixTalk.packages.${pkgs.system}.nixTalk-wrapper;
+        package = inputs.nixTalk;
       }
     ];
   };

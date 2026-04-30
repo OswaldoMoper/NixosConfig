@@ -1,6 +1,6 @@
 <h1 align=center>
   Oswaldo's Universal NixOS configuration<br />
-  <a href="https://github.com/NixOS/nixpkgs/tree/nixos-25.05"><img src="https://img.shields.io/badge/nixpkgs-25.05-brightgreen" alt="nixpkgs 25.05" /></a>
+  <a href="https://github.com/NixOS/nixpkgs/tree/nixos-25.11"><img src="https://img.shields.io/badge/nixpkgs-25.11-brightgreen" alt="nixpkgs 25.11" /></a>
 </h1>
 
 Modular, multiuser, multiapp and multihost configuration for NixOS (also NixOS-WSL); reproducible, extensible and maintainable in one branch.
@@ -202,29 +202,50 @@ If the app is a web app that you are going to host, define the following in the 
 ```Nix
 {pkgs, ... }: {
   # ... other host configurations ...
-  webStack.enable = true;
-  webStack.email = "example@mail.com";
-  webStack.manager = "admin";
-  webStack.apps = [
-    {
-      name = "nixTalk";
-      domain = "nixTalk.oswaldomoper.com";
-      port = 2000;
-      environment = {
-        nixTalk_STATIC     = "/home/<name>/nixTalk/static";
-        nixTalk_PORT       = "2000";
-        nixTalk_UPLOAD     = "/home/<name>/upload";
-        nixTalk_APPROOT    = "https://nixTalk.oswaldomoper.com";
-        nixTalk_PGUSER     = "a postgres user";
-        nixTalk_PGPASS     = "a secretly cripted password";
-        nixTalk_PGHOST     = "localhost or your db host";
-        nixTalk_PGPORT     = "5432 or the port you use";
-        nixTalk_PGDATABASE = "nixTalk or the name of your database";
-        nixTalk_PGPOOLSIZE = "10";
-      };
-      package = inputs.nixTalk.packages.${pkgs.system}.nixTalk-wrapper;
-    }
-  ];
+  webStack = {
+    enable = true;
+    email = "example@mail.com";
+    manager = "admin";
+    nginx.apps = [
+      {
+        name = "nixTalk";
+        domain = "nixTalk.oswaldomoper.com";
+        port = 2000;
+        environment = {
+          nixTalk_STATIC     = "/home/<name>/nixTalk/static";
+          nixTalk_PORT       = "2000";
+          nixTalk_UPLOAD     = "/home/<name>/upload";
+          nixTalk_APPROOT    = "https://nixTalk.oswaldomoper.com";
+          nixTalk_PGUSER     = "a postgres user";
+          nixTalk_PGPASS     = "a secretly cripted password";
+          nixTalk_PGHOST     = "localhost or your db host";
+          nixTalk_PGPORT     = "5432 or the port you use";
+          nixTalk_PGDATABASE = "nixTalk or the name of your database";
+          nixTalk_PGPOOLSIZE = "10";
+        };
+        package = inputs.nixTalk;
+        # Additionally, you can reference the name of the binary
+        binaryName = "nixTalk-noWrapped"; # default: ${name}-wrapped
+      }
+    ];
+    tunnel = {
+      enable = true;
+      # Enable useNginx only if needed
+      useNginx = true;
+      apps = [
+        {
+          name   = "blog";
+          domain = "oswaldomoper.com";
+          port   = 2001;
+          package = inputs.moper;
+          environment = {
+            # ... Environment configurations ...
+          };
+          binaryName = "blog-noWrapped"; # default: ${name}-wrapped
+        }
+      ];
+    };
+  };
   # ... other host configurations ...
 }
 ```
@@ -232,22 +253,22 @@ If the app is a web app that you are going to host, define the following in the 
 When `webStack.enable = true`
 
 - `webStack.email` must be non-empty
-- `webStack.apps` must contain at leat one app
+- `webStack.tunnel.apps` or `webStack.nginx.apps` must contain at leat one app
 
 and the module automatically:
 
-- enables Nginx
 - creates one virtualHost per app
-- configures ACME certificates when `mode = "nginx"`
-- configures Cloudflare Tunnel when `mode = "tunnel"`
+- configures ACME certificates only to `nginx.apps` when exists
+- configures Cloudflare Tunnel when `tunnel.apps` exists
 - creates one systemd service per app
 - injects the `environment` variables into the service
 
 **NOTES:**
 
-- `webStack.apps.[*].environment` accepts strings, paths, packages and null values (same type as `systemd.services.<name>.environment`).
-- `webStack.apps.[*].port` values must be unique
-- `webStack.mode` controls how apps are exposed: `"nginx"` for direct HTTPS with ACME, `"tunnel"` for Cloudflare Tunnel (default)
+- `webStack.<mode>.apps.[*].environment` accepts strings, paths, packages and null values (same type as `systemd.services.<name>.environment`).
+- `webStack.<mode>.apps.[*].port` values must be unique
+- `webStack.<mode>.apps.[*].name` values must be unique
+- `webStack.<mode>.apps.[*].domain` values must be unique
 
 ## 🚀 Deploying to remote servers (deploy-rs)
 

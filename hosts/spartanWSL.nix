@@ -1,6 +1,7 @@
 { pkgs, self, inputs, ... }@args:
 
 let home = "/home/omoper";
+  myEmail = "omoper@example.com";
 in
 {
   # dummy deploy example
@@ -16,7 +17,7 @@ in
   myUsers.omoper = {
     enable = true;
     fullName = "Oswaldo Moper";
-    email = "omoper@example.com";
+    email = myEmail;
     # hashedPassword = "$6$IqhGanTrCJ3Y8GMS$2.q7j7DfXCbEEo1zUNkQTsSL5JuPpZbM4AghPXdycMBL6Hond51SCECELA7ufpbdrlq/u5UY/91Ph4Pu5Q/GW.";
     home = {
       enable = true;
@@ -41,33 +42,37 @@ in
   # Web Hosting Service
   webStack = {
     enable = true;
-    email = "omoper@example.com";
+    email = myEmail;
     manager = "omoper";
-    tunnelCredentials = "${home}/.cloudflared/uuid.json";
-    apps = [
-      {
-        name = "nixTalk";
-        domain = "nixTalk.oswaldomoper.com";
-        port = 2000;
-        package = inputs.nixTalk.packages.${pkgs.system}.nixTalk-wrapper;
-        environment = {
-          YESOD_STATIC_DIR = "${home}/nixTalk/static";
-          YESOD_PORT       = "2000";
-          YESOD_APPROOT    = "https://nixTalk.oswaldomoper.com";
-        };
-      }
-      {
-        name = "blog";
-        domain = "oswaldomoper.com";
-        port = 2001;
-        package = inputs.moper.packages.${pkgs.system}.blog-wrapper;
-        environment = {
-          YESOD_STATIC_DIR = "${home}/blog/static";
-          YESOD_PORT       = "2001";
-          YESOD_APPROOT    = "https://oswaldomoper.com";
-        };
-      }
-    ];
+    tunnel = {
+      enable = true;
+      credentials = "${home}/.cloudflared/uuid.json";
+      useNginx = false;
+      apps = [
+        {
+          name = "nixTalk";
+          domain = "nixTalk.oswaldomoper.com";
+          port = 2000;
+          package = inputs.nixTalk;
+          environment = {
+            YESOD_STATIC_DIR = "${home}/nixTalk/static";
+            YESOD_PORT       = "2000";
+            YESOD_APPROOT    = "https://nixTalk.oswaldomoper.com";
+          };
+        }
+        {
+          name = "blog";
+          domain = "oswaldomoper.com";
+          port = 2001;
+          package = inputs.moper;
+          environment = {
+            YESOD_STATIC_DIR = "${home}/blog/static";
+            YESOD_PORT       = "2001";
+            YESOD_APPROOT    = "https://oswaldomoper.com";
+          };
+        }
+      ];
+    };
   };
   # PostgreSQL server
   postgresql = {
@@ -133,8 +138,8 @@ in
       wslu
       sops
       # Requisites for deploying tools
-      inputs.deploy-rs.packages.${pkgs.system}.default
-      self.packages.${pkgs.system}.deploy-migration
+      inputs.deploy-rs.packages.${pkgs.stdenv.hostPlatform.system}.default
+      self.packages.${pkgs.stdenv.hostPlatform.system}.deploy-migration
     ];
   };
   # General Nix config
