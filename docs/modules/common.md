@@ -19,15 +19,13 @@ This module is imported by **every host** through the flake.
 
 ### `system.stateVersion`
 
-Ensures stable behavior across NixOS upgrades.
+Ensures stable behavior across NixOS upgrades. Currently, `25.11`
 
 ### Nix settings
 
 - `allow-import-from-derivation`
 - `auto-optimise-store`
 - `download-buffer-size`
-- `trusted-public-keys`
-- `substituters`
 - `gc.automatic`
 - `gc.options`
 - `extraOptions` (enables flakes and keeps derivations)

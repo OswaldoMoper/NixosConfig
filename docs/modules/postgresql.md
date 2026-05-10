@@ -10,7 +10,7 @@ This module provides a declarative interface for configuring PostgreSQL on NixOS
 - Integrate cleanly with migration scripts
 - Ensure safe and predictable PostgreSQL behavior
 
-This module activates only when `postgresql.enable = true`.
+This module is only active when `postgresql.enable = true`.
 
 ## Features
 
@@ -59,7 +59,7 @@ When enabled, the module:
 
 If `initialSetup.enable = true`, then:
 
-- `role` mustn't be empty
+- `role` must not be empty
 - `passwordFile` mustn't be null
 - `database` mustn't be empty
 

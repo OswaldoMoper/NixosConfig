@@ -15,7 +15,7 @@ let
       in
         app.package.packages.${system}.${wrapperName}
         or app.package.packages.${system}.${app.name}
-        or (throw "Package '${app.name}' or '${wrapperName}' was not fount in the input of ${app.name}")
+        or (throw "Package '${app.name}' or '${wrapperName}' was not found in the input of ${app.name}")
     else throw "The value provided in 'package' for ${app.name} is not valid.";
 
   mkVHost = {app, enableACME ? false}: {
@@ -112,6 +112,19 @@ in
           description = "List of web apps";
         };
         useNginx = mkEnableOption "Use nginx proxy";
+        ssh = {
+          enable = mkEnableOption "SSH through Cloudflare Tunnel";
+          domain = mkOption {
+            type = types.str;
+            description = "Public domain for the service";
+            default = "";
+          };
+          port = mkOption {
+            type = types.port;
+            description = "Internal port the service listens on";
+            default = 22;
+          };
+        };
       };
     };
 
@@ -135,16 +148,28 @@ in
             message = "webStack: Nginx stack is enabled but no apps are defined in 'nginx.apps'.";
           }
           {
+            assertion = cfg.tunnel.ssh.enable -> cfg.tunnel.enable != false;
+            message = "webStack: SSH service is enabled but `tunnel.enable` is disabled";
+          }
+          {
+            assertion = cfg.tunnel.ssh.enable -> cfg.tunnel.ssh.domain != "";
+            message = "webStack: SSH service is enabled but `tunnel.ssh.domain` is void or null.";
+          }
+          {
             assertion =
-              builtins.length (lib.unique (map (a: a.port) (cfg.tunnel.apps ++ cfg.nginx.apps)))
-              == builtins.length allApps;
-            message = "webStack apps must have unique ports";
+              let
+                ports = (map (a: a.port) allApps)
+                  ++ (lib.optional cfg.tunnel.ssh.enable cfg.tunnel.ssh.port);
+              in builtins.length (lib.unique ports) == builtins.length ports;
+            message = "webStack: Each service must have unique port";
           }
           {
             assertion = 
-              builtins.length (lib.unique (map (a: a.domain) allApps)) 
-              == builtins.length allApps;
-            message = "webStack: Each app must have a unique domain."; 
+              let
+                domains = (map (a: a.domain) allApps)
+                  ++ (lib.optional cfg.tunnel.ssh.enable cfg.tunnel.ssh.domain);
+              in builtins.length (lib.unique domains) == builtins.length domains;
+            message = "webStack: Each service must have a unique domain.";
           }
           {
             assertion =
@@ -170,13 +195,17 @@ in
         enable = true;
         tunnels.${cfg.tunnel.name} = {
           credentialsFile = cfg.tunnel.credentials;
-          ingress = 
+          ingress = mkMerge [
             (lib.listToAttrs (map (app: {
               name = app.domain;
               value = if cfg.tunnel.useNginx 
                 then "http://${app.domain}" 
                 else "http://localhost:${toString app.port}";
-            }) cfg.tunnel.apps));
+            }) cfg.tunnel.apps))
+            (mkIf cfg.tunnel.ssh.enable {
+                ${cfg.tunnel.ssh.domain} = "ssh://localhost:${toString cfg.tunnel.ssh.port}";
+            })
+          ];
           default = "http_status:404";
         };
       };

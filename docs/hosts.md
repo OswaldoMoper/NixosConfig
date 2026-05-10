@@ -104,7 +104,7 @@ hosts/hardware/<name>.nix
 
 ### Notes
 
-- Hardware files **mustn't** be shared between machines
+- Hardware files **must not** be shared between machines
 - If you reinstall or change disks, regenerate the file
 - If you use WSL, you **don't** need a hardware file
 
@@ -168,7 +168,7 @@ in {
   };
   myUsers.omoper = {
     enable = true;
-    fullName = "Oswaldo Moper";
+    native.description = "Oswaldo Moper";
     email = "omoper@example.com";
     home = {
       enable = true;
@@ -221,7 +221,7 @@ in {
           nixTalk_UPLOAD     = "${home}/upload";
           nixTalk_APPROOT    = "https://nixTalk.oswaldomoper.com";
           nixTalk_PGUSER     = "omoper";
-          nixTalk_PGPASS     = "a secretly cripted password";
+          nixTalk_PGPASS     = "an encrypted password";
           nixTalk_PGHOST     = "localhost";
           nixTalk_PGPORT     = "5432";
           nixTalk_PGDATABASE = "nixTalk";
@@ -260,17 +260,16 @@ Servers typically enable:
 
   myUsers.example = {
     enable = true;
-    fullName = "Example User";
+    native.description = "Example User";
     email = "example@mail.com";
     home.msmtp = {
       enable = true;
       passwordFile = "/home/example/password.txt";
     };
+    native.openssh.authorizedKeys.keys = [
+      "ssh-ed25519 AAAA..."
+    ];
   };
-
-  users.users.example.openssh.authorizedKeys.keys = [
-    "ssh-ed25519 AAAA..."
-  ];
 
   webStack = {
     enable = true;
@@ -288,7 +287,7 @@ Servers typically enable:
           nixTalk_UPLOAD     = "/home/example/upload";
           nixTalk_APPROOT    = "https://domain.com";
           nixTalk_PGUSER     = "omoper";
-          nixTalk_PGPASS     = "a secretly cripted password";
+          nixTalk_PGPASS     = "an encrypted password";
           nixTalk_PGHOST     = "localhost";
           nixTalk_PGPORT     = "5432";
           nixTalk_PGDATABASE = "nixTalk";
@@ -319,7 +318,7 @@ Servers typically enable:
   networking.hostName = "fullExample";
   myUsers.omoper = {
     enable = true;
-    fullName = "Oswaldo Moper";
+    native.description = "Oswaldo Moper";
     email = "omoper@example.com";
     home = {
       enable = true;
@@ -355,7 +354,7 @@ Servers typically enable:
           nixTalk_UPLOAD     = "/home/omoper/upload";
           nixTalk_APPROOT    = "https://nixTalk.oswaldomoper.com";
           nixTalk_PGUSER     = "omoper";
-          nixTalk_PGPASS     = "a secretly cripted password";
+          nixTalk_PGPASS     = "an encrypted password";
           nixTalk_PGHOST     = "localhost";
           nixTalk_PGPORT     = "5432";
           nixTalk_PGDATABASE = "nixTalk";
@@ -389,7 +388,7 @@ Servers typically enable:
 
 ## When to create a new host
 
-create a new host file when:
+Create a new host file when:
 
 - you install NixOS on a new machine
 - you want a different role (server, WSL, laptop, VM)
