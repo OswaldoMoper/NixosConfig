@@ -12,7 +12,7 @@
   # Dummy user
   myUsers.example = {
     enable = true;
-    fullName = "Example User";
+    native.description = "Example User";
     email = "example@mail.com";
     home = {
       msmtp = {
@@ -36,7 +36,7 @@
         name = "nixTalk";
         domain = "domain.com";
         port = 2000;
-        package = inputs.nixTalk.packages.${pkgs.system}.nixTalk-wrapper;
+        package = inputs.nixTalk;
       }
     ];
   };
