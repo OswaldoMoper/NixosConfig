@@ -1,13 +1,13 @@
 # webstack — Declarative Web Hosting Stack
 
-This module provides a unified interface for hosting web applications on NixOS. It supports pure Nginx hosting, Cloudflare Tunnel hosting or both, with automatic per-application systemd services
+This module centralizes web application deployment on NixOS. It supports pure Nginx hosting, Cloudflare Tunnel hosting or both, with automatic per-application systemd services
 
-This module activates only when `webStack.enable = true`.
+This module is only active when `webStack.enable = true`.
 
 ## Purpose
 
 - Declarative hosting for Yesod and other web apps
-- Avoid duplicated Nginx or cloudflared configuration across hosts
+- Eliminate redundant Nginx or cloudflared configurations across multiple hosts.
 - Automatic systemd services per app
 - Optional ACME certificates (Nginx apps only)
 - Safe defaults (SSL, unique ports, unique names, unique domains)
@@ -96,6 +96,26 @@ If `useNginx = false`:
 }
 ```
 
+#### SSH Access
+
+This module also allows to expose the SSH service of the host securely through tunnel:
+
+```Nix
+{
+  webStack.tunnel.ssh = {
+    enable = true;
+    domain = "ssh.oswaldomoper.com";
+    port = 22;
+  };
+}
+```
+
+- **Automatic ingress**: Creates a rule `ssh://localhost:22` on the tunnel.
+- **Without ports exposure**: Don't require to allow port 22 on the extern firewall, the traffic travel inside the tunnel.
+- **Dependent SSH**: if `tunnel.ssh.enable` is true, `tunnel.enable` must be true.
+- **Obligatory Domain**: SSH can't be enable without `tunnel.ssh.domain`
+- **Global unicity**: The domain and port of SSH are included on the assertions of duplicate of webStack.
+
 ## App Schema
 
 Each app in `nginx.apps` or `tunnel.apps` has:
@@ -149,8 +169,8 @@ Each app (of nginx or tunnel) generates a service:
 
 The module enforces:
 
-- `email` must not be empty
-- `nginx.apps` or `tunnel.apps` must not be empty
+- The `email` must not be empty
+- `nginx.apps` or `tunnel.apps` must not be empty when `nginx` or `tunnel` enabled respectively
 - All app ports must be unique
 - All app domains must be unique
 - All app names must be unique
@@ -219,7 +239,7 @@ These are implemented via Nix assertions.
             nixTalk_PORT       = "2000";
             nixTalk_UPLOAD     = "/home/omoper/upload";
             nixTalk_APPROOT    = "https://nixTalk.oswaldomoper.com";
-            # if your app use postgres
+            # if your app uses postgres
             nixTalk_PGUSER     = "omoper";
             nixTalk_PGPASS     = "your password";
             nixTalk_PGHOST     = "localhost"; # or your dbhost
@@ -259,7 +279,7 @@ These are implemented via Nix assertions.
             example_UPLOAD     = "/home/admin/upload";
             example_PORT       = "3000";
             example_APPROOT    = "https://myapp.example.com";
-            # if your app use postgres
+            # if your app uses postgres
             example_PGUSER     = "your postgres user";
             example_PGPASS     = "your password";
             example_PGHOST     = "localhost"; # or your dbhost

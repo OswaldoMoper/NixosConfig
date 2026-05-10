@@ -4,63 +4,61 @@ This module provides a declarative interface for defining system users with inte
 
 ## Purpose
 
-- Provide a unified user management DSL
-- Integrate system users with Home Manager
+- Provides a direct bridge to NixOS native user settings via the `native` block.
+- Automatically maps system users to Home Manager configurations.
 - Configure Git, msmtp, SSH keys and VSCode per user
 - Support reusable Home Manager profiles
 - Avoid repeating user configuration across hosts
 
-This module activates only when a user entry has `enable = true`.
+This module is only active when a user entry has `enable = true`.
 
 ## Structure
 
 A user entry has the following shape:
 
 ```nix
-myUsers.<name> = { 
-  enable = true;
-  fullName = "...";
-  password = null;
-  hashedPassword = null;
-  email = "...";
-  home = { 
-    enable = false;
-    profiles = [ ];
-    git = { 
-      enable = false;
-      email = <defaults to user email>;
-      tag = ""; 
+{  
+  myUsers.<name> = { 
+    enable = true;
+    native = {
+      description = "...";
+      password = null;
+      hashedPassword = null;
     };
-    msmtp = {
+    email = "...";
+    home = { 
       enable = false;
-      email = <defaults to user email>;
-      passwordFile = "";
-    };
-    sshKeys = { 
-      enable = false;
-      baseName = {
+      profiles = [ ];
+      git = { 
         enable = false;
-        name = "";
+        email = <defaults to user email>;
+        tag = ""; 
       };
-      names = [ ];
-    };
-    vscode.enable = false; 
-  }; 
-};
+      msmtp = {
+        enable = false;
+        email = <defaults to user email>;
+        passwordFile = "";
+      };
+      sshKeys = { 
+        enable = false;
+        baseName = {
+          enable = false;
+          name = "";
+        };
+        names = [ ];
+      };
+      vscode.enable = false; 
+    }; 
+  };
+}
 ```
 
 ## System User Configuration
 
-When enable = true, the module creates:
+This module acts as a **wrapper** for the standard NixOS `users.users.<name>` option.
 
-- a normal user
-- with Zsh as the default shell
-- added to groups: `wheel`, `networkmanager`, `video`, `audio`
-
-Password options:
-
-- `password` → plaintext (for testing only)
-- `hashedPassword` → recommended
+- **Automatic Defaults**: When `enable = true`, the module automatically configures the user as a `isNormalUser`, sets `zsh` as the shell, and adds essential groups (`wheel`, `networkmanager`, etc.).
+- **Native Pass-through**: Any attribute defined inside the `native` block is passed directly to the underlying NixOS user configuration. This allows you to use 100% of NixOS native features without limitations.
 
 ## Home Manager Integration
 
@@ -195,7 +193,7 @@ Enables VSCode Remote integration via Home Manager.
   # ... other host configurations ...
   myUsers.omoper = {
     enable = true;
-    fullName = "Oswaldo Moper";
+    native.description = "Oswaldo Moper";
     email = "omoper@example.com";
 
     home = {

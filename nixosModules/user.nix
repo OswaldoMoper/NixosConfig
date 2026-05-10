@@ -1,28 +1,21 @@
-{ config, pkgs, lib, ... }:
+{ config, pkgs, lib, options, ... }:
 
 let
-  inherit (lib) mkIf mkOption mkEnableOption types mapAttrs optionalString concatStringsSep;
+  inherit (lib) mkIf mkOption mkEnableOption types mapAttrs optionalString concatStringsSep recursiveUpdate;
 in
 {
   options.myUsers = mkOption {
     type = types.attrsOf (types.submodule({ name, ...}: {
       options = {
+        native = mkOption {
+          type = types.submodule {
+            freeformType = types.attrsOf types.unspecified;
+          };
+          default = {};
+          description = "Natives options of NixOS users.users";
+        };
+
         enable = mkEnableOption "Enable this user";
-        fullName = mkOption {
-          type = types.str;
-          default = name;
-          description = "Full name of the user";
-        };
-        password = mkOption {
-          type = types.nullOr types.str;
-          default = null;
-          description = "Plaintext password for this user.";
-        };
-        hashedPassword = mkOption {
-          type = types.nullOr types.str;
-          default = null;
-          description = "Hashed password for this user.";
-        };
         email = mkOption {
           type = types.str;
           default = "";
@@ -84,14 +77,14 @@ in
     default = {};
   };
   config = {
-    users.users = mapAttrs (name: cfg: mkIf cfg.enable {
-      isNormalUser = true;
-      description = cfg.fullName;
-      shell = pkgs.zsh;
-      extraGroups = [ "wheel" "networkmanager" "video" "audio" ];
-      password = mkIf (cfg.password != null) cfg.password;
-      hashedPassword = mkIf (cfg.hashedPassword != null) cfg.hashedPassword;
-    })config.myUsers;
+    users.users = mapAttrs (name: cfg:
+      mkIf cfg.enable (
+        recursiveUpdate {
+        isNormalUser = true;
+        shell = pkgs.zsh;
+      } cfg.native
+      )
+    ) config.myUsers;
     programs = {
       nix-index.enableZshIntegration = true;
       zsh = {

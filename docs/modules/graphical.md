@@ -20,7 +20,6 @@ Designed for Windows Subsystem for Linux:
 - Does **not** enable X11 or Wayland
 - Does **not** enable SDDM or Plasma
 - Integrates with Windows graphical stack
-- Allows keyboard and font configuration
 - Minimal overhead
 
 Use this mode when running NixOS inside WSL.

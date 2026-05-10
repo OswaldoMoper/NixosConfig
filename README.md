@@ -3,7 +3,7 @@
   <a href="https://github.com/NixOS/nixpkgs/tree/nixos-25.11"><img src="https://img.shields.io/badge/nixpkgs-25.11-brightgreen" alt="nixpkgs 25.11" /></a>
 </h1>
 
-Modular, multiuser, multiapp and multihost configuration for NixOS (also NixOS-WSL); reproducible, extensible and maintainable in one branch.
+A modular NixOS configuration supporting multiple users, applications, and hosts (also NixOS-WSL); reproducible, extensible and maintainable in one branch.
 
 - [🔍 General description](#-general-description)
 - [🏎️ Quick Start (WSL)](#️-quick-start-wsl)
@@ -131,7 +131,7 @@ Each user is declared on the corresponding host:
   # ... other host configurations ...
   myUsers.omoper = {
     enable = true;
-    fullName = "Oswaldo Moper";
+    native.description = "Oswaldo Moper";
     email = "example@gmail.com";
     home = {
       enable = true;
@@ -217,7 +217,7 @@ If the app is a web app that you are going to host, define the following in the 
           nixTalk_UPLOAD     = "/home/<name>/upload";
           nixTalk_APPROOT    = "https://nixTalk.oswaldomoper.com";
           nixTalk_PGUSER     = "a postgres user";
-          nixTalk_PGPASS     = "a secretly cripted password";
+          nixTalk_PGPASS     = "an encrypted password";
           nixTalk_PGHOST     = "localhost or your db host";
           nixTalk_PGPORT     = "5432 or the port you use";
           nixTalk_PGDATABASE = "nixTalk or the name of your database";
@@ -253,7 +253,7 @@ If the app is a web app that you are going to host, define the following in the 
 When `webStack.enable = true`
 
 - `webStack.email` must be non-empty
-- `webStack.tunnel.apps` or `webStack.nginx.apps` must contain at leat one app
+- `webStack.tunnel.apps` or `webStack.nginx.apps` must contain at least one app
 
 and the module automatically:
 

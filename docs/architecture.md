@@ -1,6 +1,6 @@
 # Architecture Overview
 
-This repository implements a universal, modular NixOS architecture:
+This repository implements a universal, currently optimized for x86_64-linux systems, modular NixOS architecture:
 
 - **Multihost**: each file in `hosts/` becomes a NixOS configuration
 - **Multiuser**: declarative users with Home Manager integration
@@ -14,8 +14,9 @@ The flake automatically reads all `.nix` files in `hosts/` and generates:
 
 - `nixosConfigurations.<host>`
 - `deploy.nodes` (if deployment is declared)
+- Every `.nix` file in `hosts/` must be a valid NixOS configuration.
 
-No manual editing of `flake.nix` is required to add new machines.
+Adding new machines requires zero modifications to `flake.nix`.
 
 ## Deployment architecture
 
