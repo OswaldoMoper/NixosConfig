@@ -1,57 +1,50 @@
-{ pkgs, self, inputs, ... }@args:
+{ pkgs, self, inputs, lib, ... }@args:
 
 let home = "/home/omoper";
   myEmail = "omoper@example.com";
+  nixTalk = builtins.getFlake "github:OswaldoMoper/nixTalk?rev=2c2250d4afb4c5cc7fad5f064694269720129e58";
+  moper   = builtins.getFlake "github:OswaldoMoper/blog?rev=a97f2a0a8fc07f9e99b81bcd65731e9fe2c7f935";
+  secrets = builtins.getFlake "git+ssh://git@github.com/redacted/ConfigsSecrets.git?rev=d8f8451cf28c8be59eeb19980f278a2fd897f9f8";
+  remote  = secrets.rcs.spartanWSL;
 in
 {
-  services.openssh.settings = {
-    PasswordAuthentication = false;
-    AllowUsers = [ "guest" ];
-  };
-  # dummy deploy example
-  deployment.nodes.exampleServer = {
-    hostname = "0.0.0.0";
-    fastConnection = false;
-    profiles.system = {
-      sshUser = "example";
-      path = inputs.deploy-rs.lib.x86_64-linux.activate.nixos self.nixosConfigurations.exampleServer;
-      user = "root";
-    };
-  };
-  myUsers = {
-    omoper = {
-      enable = true;
-      native.description = "Oswaldo Moper";
-      email = myEmail;
-      # native.hashedPassword = "$6$IqhGanTrCJ3Y8GMS$2.q7j7DfXCbEEo1zUNkQTsSL5JuPpZbM4AghPXdycMBL6Hond51SCECELA7ufpbdrlq/u5UY/91Ph4Pu5Q/GW.";
-      home = {
+  imports = [ ./hardware/WSL.nix ];
+
+  deployment = secrets.deployment;
+
+  services.openssh.settings = lib.mkMerge [
+    remote.services.openssh.settings
+  ];
+
+  myUsers = lib.mkMerge [
+    {
+      omoper = {
         enable = true;
-        git = {
+        native.description = "Oswaldo Moper";
+        email = myEmail;
+        # native.hashedPassword = "$6$IqhGanTrCJ3Y8GMS$2.q7j7DfXCbEEo1zUNkQTsSL5JuPpZbM4AghPXdycMBL6Hond51SCECELA7ufpbdrlq/u5UY/91Ph4Pu5Q/GW.";
+        home = {
           enable = true;
-          tag = "Oswaldo Moper";
-        };
-        msmtp = {
-          enable = true;
-          passwordFile = "${home}/password.txt";
-        };
-        sshKeys = {
-          enable = true;
-          baseName = {
+          git = {
             enable = true;
-            name = "OswaldoMoper";
+            tag = "Oswaldo Moper";
+          };
+          msmtp = {
+            enable = true;
+            passwordFile = "${home}/password.txt";
+          };
+          sshKeys = {
+            enable = true;
+            baseName = {
+              enable = true;
+              name = "OswaldoMoper";
+            };
           };
         };
-        vscode.enable = false;
       };
-    };
-    guest = {
-      enable = true;
-      native.openssh.authorizedKeys.keys = [
-        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJm3IcBc1AhUqWxBbPRbV0R8l+hVhvb3jbE3mH53xDf2 omoper@spartanWSL"
-      ];
-      native.hashedPassword = "$6$m3XlekcirbUjv1cA$Mho9wYkucAROC8p9.JLcXwS23sHeYNYTCI2ibci81P75IoqKzed/NqLHowqMTP2To2U2Yof.4/t6atiI.LABV.";
-    };
-  };
+    }
+    remote.myUsers
+  ];
   # Web Hosting Service
   webStack = {
     enable = true;
@@ -66,7 +59,7 @@ in
           name = "nixTalk";
           domain = "nixTalk.oswaldomoper.com";
           port = 2000;
-          package = inputs.nixTalk;
+          package = nixTalk;
           environment = {
             YESOD_STATIC_DIR = "${home}/nixTalk/static";
             YESOD_PORT       = "2000";
@@ -77,7 +70,7 @@ in
           name = "blog";
           domain = "oswaldomoper.com";
           port = 2001;
-          package = inputs.moper;
+          package = moper;
           environment = {
             YESOD_STATIC_DIR = "${home}/blog/static";
             YESOD_PORT       = "2001";
@@ -109,11 +102,12 @@ in
   wsl = {
     enable = true;
     defaultUser = "omoper";
-    tarball.configPath = "/etc/nixos";
+    tarball.configPath = "/home/omoper/NixosConfig";
   };
   # Enable and configure networking and firewall
   networking = {
     networkmanager.enable = true;
+    wireless.enable = lib.mkForce false;
     # Open ports in the firewall
     firewall = {
       enable = true;
@@ -146,7 +140,6 @@ in
       self.packages.x86_64-linux.nixos-rebuild-migration
       # Requisites for oswaldomoper.com
       cloudflared
-      wslu
       sops
       # Requisites for deploying tools
       inputs.deploy-rs.packages.${pkgs.stdenv.hostPlatform.system}.default
@@ -154,11 +147,14 @@ in
     ];
   };
   # General Nix config
-  nix = {
-    settings = {
-      # Nix users config
-      allowed-users = [ "@wheel" "omoper" "guest" ];
-      trusted-users = [ "root" "omoper" "guest" ];
-    };
-  };
+  nix = lib.mkMerge [
+    {
+      settings = {
+        # Nix users config
+        allowed-users = [ "@wheel" "omoper" ];
+        trusted-users = [ "root" "omoper" ];
+      };
+    }
+    remote.nix
+  ];
 }

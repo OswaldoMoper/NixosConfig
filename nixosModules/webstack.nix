@@ -185,10 +185,16 @@ in
       };
 
       services.nginx = {
-        enable = cfg.nginx.apps != [] || (cfg.tunnel.enable && cfg.tunnel.useNginx);
-        virtualHosts = 
-          (listToAttrs (map (app: mkVHost { inherit app; enableACME = true; }) cfg.nginx.apps)) //
-          (mkIf cfg.tunnel.useNginx (listToAttrs (map (app: mkVHost { inherit app; enableACME = false; }) cfg.tunnel.apps)));
+        enable = (cfg.nginx.enable && cfg.nginx.apps != []) ||
+                 (cfg.tunnel.enable && cfg.tunnel.useNginx);
+        virtualHosts = lib.mkMerge [
+          (mkIf (cfg.nginx.enable && cfg.nginx.apps != []) (
+            listToAttrs (map (app: mkVHost { inherit app; enableACME = true; }) cfg.nginx.apps)
+          ))
+          (mkIf (cfg.tunnel.enable && cfg.tunnel.useNginx) (
+            listToAttrs (map (app: mkVHost { inherit app; enableACME = false; }) cfg.tunnel.apps)
+          ))
+        ];
       };
 
       services.cloudflared = mkIf cfg.tunnel.enable {

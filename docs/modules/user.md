@@ -47,7 +47,6 @@ A user entry has the following shape:
         };
         names = [ ];
       };
-      vscode.enable = false; 
     }; 
   };
 }
@@ -65,7 +64,7 @@ This module acts as a **wrapper** for the standard NixOS `users.users.<name>` op
 When `home.enable = true`, the module:
 
 - creates a Home Manager user
-- sets `home.stateVersion = "25.05"`
+- sets `home.stateVersion = "26.05"`
 - enables `ssh-agent` if SSH keys are configured
 - imports profiles from `hmProfiles`/
 
@@ -152,14 +151,6 @@ Loads:
 - `~/.ssh/work`
 - `~/.ssh/github`
 
-## VSCode Integration
-
-```Nix
-home.vscode.enable = true;
-```
-
-Enables VSCode Remote integration via Home Manager.
-
 ## Examples
 
 ### Minimal user
@@ -216,8 +207,6 @@ Enables VSCode Remote integration via Home Manager.
           name = "OswaldoMoper";
         };
       };
-
-      vscode.enable = true;
     };
   };
   # ... other host configurations ...
