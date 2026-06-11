@@ -19,7 +19,7 @@ This module is imported by **every host** through the flake.
 
 ### `system.stateVersion`
 
-Ensures stable behavior across NixOS upgrades. Currently, `25.11`
+Ensures stable behavior across NixOS upgrades. Currently, `26.05`
 
 ### Nix settings
 
@@ -27,7 +27,9 @@ Ensures stable behavior across NixOS upgrades. Currently, `25.11`
 - `auto-optimise-store`
 - `download-buffer-size`
 - `gc.automatic`
-- `gc.options`
+- `gc.dates` (weekly)
+- `gc.options` (delete older than 30 days)
+- `package` (set stable nixVersions)
 - `extraOptions` (enables flakes and keeps derivations)
 
 ### nixpkgs configuration

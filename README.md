@@ -1,6 +1,6 @@
 <h1 align=center>
   Oswaldo's Universal NixOS configuration<br />
-  <a href="https://github.com/NixOS/nixpkgs/tree/nixos-25.11"><img src="https://img.shields.io/badge/nixpkgs-25.11-brightgreen" alt="nixpkgs 25.11" /></a>
+  <a href="https://github.com/NixOS/nixpkgs/tree/nixos-26.05"><img src="https://img.shields.io/badge/nixpkgs-26.05-brightgreen" alt="nixpkgs 26.05" /></a>
 </h1>
 
 A modular NixOS configuration supporting multiple users, applications, and hosts (also NixOS-WSL); reproducible, extensible and maintainable in one branch.
@@ -105,13 +105,15 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
 │   └── nixos-rebuild-migration.sh
 ├── hosts/
 │   ├── hardware/
-│   │   ├── server.nix  ← Not included
-│   │   └── laptop.nix  ← Not included
+│   │   ├── WSL.nix
+│   │   ├── server.nix    ← Not included
+│   │   └── laptop.nix    ← Not included
+│   ├── exampleServer.nix
 │   ├── spartanWSL.nix
-│   ├── laptop.nix      ← Not included
-│   └── server.nix      ← Not included
+│   └── laptop.nix        ← Not included
 ├── nixosModules/
 │   ├── common.nix
+│   ├── deployment.nix
 │   ├── graphical.nix
 │   ├── postgresql.nix
 │   ├── user.nix        ← multiuser module
@@ -150,7 +152,6 @@ Each user is declared on the corresponding host:
           name = "OswaldoMoper";
         };
       };
-      vscode.enable = true;
     };
   };
   # ... other host configurations ...
@@ -162,7 +163,6 @@ This activates:
 - git per user
 - msmtp per user
 - SSH + ssh-agent
-- VSCode
 - Declarative config per user
 
 ## 🖥️ Declaring hosts
@@ -206,28 +206,31 @@ If the app is a web app that you are going to host, define the following in the 
     enable = true;
     email = "example@mail.com";
     manager = "admin";
-    nginx.apps = [
-      {
-        name = "nixTalk";
-        domain = "nixTalk.oswaldomoper.com";
-        port = 2000;
-        environment = {
-          nixTalk_STATIC     = "/home/<name>/nixTalk/static";
-          nixTalk_PORT       = "2000";
-          nixTalk_UPLOAD     = "/home/<name>/upload";
-          nixTalk_APPROOT    = "https://nixTalk.oswaldomoper.com";
-          nixTalk_PGUSER     = "a postgres user";
-          nixTalk_PGPASS     = "an encrypted password";
-          nixTalk_PGHOST     = "localhost or your db host";
-          nixTalk_PGPORT     = "5432 or the port you use";
-          nixTalk_PGDATABASE = "nixTalk or the name of your database";
-          nixTalk_PGPOOLSIZE = "10";
-        };
-        package = inputs.nixTalk;
-        # Additionally, you can reference the name of the binary
-        binaryName = "nixTalk-noWrapped"; # default: ${name}-wrapped
-      }
-    ];
+    nginx = {
+      enable = true;
+      apps = [
+        {
+          name = "nixTalk";
+          domain = "nixTalk.oswaldomoper.com";
+          port = 2000;
+          environment = {
+            nixTalk_STATIC     = "/home/<name>/nixTalk/static";
+            nixTalk_PORT       = "2000";
+            nixTalk_UPLOAD     = "/home/<name>/upload";
+            nixTalk_APPROOT    = "https://nixTalk.oswaldomoper.com";
+            nixTalk_PGUSER     = "a postgres user";
+            nixTalk_PGPASS     = "an encrypted password";
+            nixTalk_PGHOST     = "localhost or your db host";
+            nixTalk_PGPORT     = "5432 or the port you use";
+            nixTalk_PGDATABASE = "nixTalk or the name of your database";
+            nixTalk_PGPOOLSIZE = "10";
+          };
+          package = inputs.nixTalk;
+          # Additionally, you can reference the name of the binary
+          binaryName = "nixTalk-noWrapped"; # default: ${name}-wrapped
+        }
+      ];
+    };
     tunnel = {
       enable = true;
       # Enable useNginx only if needed

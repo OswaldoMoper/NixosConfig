@@ -59,7 +59,7 @@ When enabled, the module:
 
 If `initialSetup.enable = true`, then:
 
-- `role` must not be empty
+- `role` must not be empty (defaults to `postgres` )
 - `passwordFile` mustn't be null
 - `database` mustn't be empty
 

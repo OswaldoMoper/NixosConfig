@@ -29,6 +29,11 @@ in
       default = [];
       description = "Fonts to install";
     };
+    vscode.enable = mkOption {
+      type = types.bool;
+      default = config.graphical.mode == "WSL";
+      description = "Enable VScode Remote integration";
+    };
   };
   config = mkIf cfg.enable {
     services = {
@@ -48,11 +53,7 @@ in
       };
       desktopManager.plasma6.enable = isGraphical;
     };
-    programs.light.enable = isGraphical;
-    programs.nix-ld = {
-        enable = isWSL;
-        package = pkgs.nix-ld;
-    };
+    programs.nix-ld.enable = cfg.vscode.enable;
     fonts.packages = mkIf isGraphical (map (f: pkgs.${f}) cfg.fonts);
     services.pipewire = {
       enable = isGraphical;

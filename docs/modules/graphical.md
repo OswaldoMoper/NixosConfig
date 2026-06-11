@@ -71,12 +71,20 @@ Example:
 graphical.fonts = [ "hack-font" "noto-fonts" ];
 ```
 
+### `graphical.vscode.enable`
+
+Enables VSCode Remote integration via nix-ld. (`true` by default in mode `WSL`)
+
+```Nix
+graphical.vscode.enable = true;
+```
+
 ## Behavior Summary
 
-| Mode   | X11 | SDDM | Plasma | Pipewire | Fonts | Keyboard |
-|--------|-----|------|--------|----------|-------|----------|
-| WSL    | ❌  | ❌   | ❌     | ❌       | ✔️    | ✔️       |
-| Linux  | ✔️  | ✔️   | ✔️     | ✔️       | ✔️    | ✔️       |
+| Mode   | X11 | SDDM | Plasma | Pipewire | Fonts | Keyboard | VSCode |
+|--------|-----|------|--------|----------|-------|----------|--------|
+| WSL    | ❌  | ❌   | ❌     | ❌       | ✔️    | ✔️       |  ✔️    |
+| Linux  | ✔️  | ✔️   | ✔️     | ✔️       | ✔️    | ✔️       |  ✔️    |
 
 ## Examples
 
@@ -104,6 +112,8 @@ graphical.fonts = [ "hack-font" "noto-fonts" ];
     keymap = "us";
     variant = "altgr-intl";
     fonts = [ "hack-font" "noto-fonts" ];
+    # If you want to remote code via vscode
+    # vscode.enable = true;
   };
   # ... other host configurations ...
 }
@@ -122,6 +132,8 @@ Do not use it for:
 - Headless servers
 - Containers
 - Remote-only machines
+
+Except when this needs remote code via vscode.
 
 ## Notes
 

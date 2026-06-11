@@ -70,7 +70,6 @@ in
               description = "SSH key names for auto-loading";
             };
           };
-          vscode.enable = mkEnableOption "Enable VScode Remote integration";
         };
       };
     }));
@@ -82,6 +81,7 @@ in
         recursiveUpdate {
         isNormalUser = true;
         shell = pkgs.zsh;
+        extraGroups = [ "networkmanager" "wheel" "video" "audio" ];
       } cfg.native
       )
     ) config.myUsers;
@@ -96,12 +96,13 @@ in
         ohMyZsh.plugins = [ "git" "sudo" "colorize" "extract" "history" "postgres" ];
         ohMyZsh.theme = "bira";
         shellInit = ''
-          NAME=$USER
-          echo "welcome to NixOS, $NAME"
-
-          if [ ! ~/.zshrc ]; then
-            echo "creating ~/.zshrc"
-            touch ~/.zshrc
+          if [[ -o interactive ]]; then
+            echo "welcome to NixOS, $USER"
+          
+            if [ ! ~/.zshrc ]; then
+              echo "creating ~/.zshrc"
+              touch ~/.zshrc
+            fi
           fi
 
           eval "$(direnv hook zsh)"
@@ -110,10 +111,9 @@ in
           any-nix-shell zsh --info-right | source /dev/stdin
         '';
       };
-      nix-ld.enable = true;
     };
     home-manager.users = mapAttrs (name: cfg: mkIf cfg.home.enable {
-      home.stateVersion = "25.11";
+      home.stateVersion = "26.05";
       services.ssh-agent.enable = cfg.home.sshKeys.enable;
       programs.git = mkIf cfg.home.git.enable {
         enable = true;
@@ -143,10 +143,8 @@ in
       programs.ssh = {
         enable = true;
         enableDefaultConfig = false;
-        matchBlocks."*" = {
-          extraOptions = {
-            "AddKeysToAgent" = "yes";
-          };
+        settings."*" = {
+          AddKeysToAgent = "yes";
           identityFile = [
             "~/.ssh/${cfg.home.sshKeys.baseName.name}_ed25519"
             "~/.ssh/${cfg.home.sshKeys.baseName.name}"
@@ -154,7 +152,6 @@ in
           ] ++ (map (key: "~/.ssh/${key}") cfg.home.sshKeys.names);
         };
       };
-      programs.vscode.enable = cfg.home.vscode.enable;
       imports =
         let
           base = ./hmProfiles;

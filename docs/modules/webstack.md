@@ -116,6 +116,41 @@ This module also allows to expose the SSH service of the host securely through t
 - **Obligatory Domain**: SSH can't be enable without `tunnel.ssh.domain`
 - **Global unicity**: The domain and port of SSH are included on the assertions of duplicate of webStack.
 
+## Options
+
+### Top-level
+
+| Option             | Type    | Default   | Description                                                      |
+| ------------------ | ------- | --------- | ---------------------------------------------------------------- |
+| `webStack.enable`  | boolean | `false`   | Enable the web hosting stack                                     |
+| `webStack.manager` | string  | `"admin"` | System user that runs all app services                           |
+| `webStack.email`   | string  | `""`      | Email for ACME certificates and notifications. Must not be empty |
+
+### `webStack.nginx`
+
+| Option         | Type        | Default | Description                            |
+| -------------- | ----------- | ------- | -------------------------------------- |
+| `nginx.enable` | boolean     | `false` | Enable the Nginx hosting stack         |
+| `nginx.apps`   | list of App | `[]`    | Web apps to host via Nginx (with ACME) |
+
+### `webStack.tunnel`
+
+| Option               | Type        | Default  | Description                                                             |
+| -------------------- | ----------- | -------- | ----------------------------------------------------------------------- |
+| `tunnel.enable`      | boolean     | `false`  | Enable the Cloudflare Tunnel stack                                      |
+| `tunnel.name`        | string      | `"main"` | Name of the Cloudflare tunnel                                           |
+| `tunnel.credentials` | string      | -        | Path to credentials JSON file (default: `/etc/.cloudflared/uuid.json`)  |
+| `tunnel.apps`        | list of App | `[]`     | Web apps to route through the tunnel                                    |
+| `tunnel.useNginx`    | boolean     | `false`  | Route tunnel traffic through Nginx instead of directly to the app       |
+
+### `webStack.tunnel.ssh`
+
+| Option              | Type    | Default | Description                                         |
+| ------------------- | ------- | ------- | --------------------------------------------------- |
+| `tunnel.ssh.enable` | boolean | `false` | Expose the host SSH service through the tunnel      |
+| `tunnel.ssh.domain` | string  | `""`    | Public domain for SSH access. Required when enabled |
+| `tunnel.ssh.port`   | port    | `22`    | Internal port the SSH service listens on            |
+
 ## App Schema
 
 Each app in `nginx.apps` or `tunnel.apps` has:

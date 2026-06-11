@@ -1,15 +1,13 @@
 {
   description = "Oswaldo's Universal NixOS configuration";
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixos-25.11";
-    nixos-wsl.url = "github:nix-community/NixOS-WSL/release-25.11";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
+    nixos-wsl.url = "github:nix-community/NixOS-WSL/release-26.05";
     home-manager = {
-      url = "github:nix-community/home-manager/release-25.11";
+      url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     flake-utils.url = "github:numtide/flake-utils";
-    nixTalk.url = "github:OswaldoMoper/nixTalk";
-    moper.url = "github:OswaldoMoper/blog";
     deploy-rs = {
       url = "github:serokell/deploy-rs";
       inputs.nixpkgs.follows = "nixpkgs";
