@@ -136,12 +136,12 @@ in
             message = "webStack requires a valid email";
           }
           {
-            assertion = allApps != [];
-            message = "webStack requires at least one app";
+            assertion = allApps != [] || cfg.tunnel.ssh.enable;
+            message = "webStack requires at least one app or SSH enabled through the tunnel";
           }
           {
-            assertion = cfg.tunnel.enable -> cfg.tunnel.apps != [];
-            message = "webStack: Cloudflare Tunnel is enabled but no apps are defined in 'tunnel.apps'.";
+            assertion = cfg.tunnel.enable -> (cfg.tunnel.apps != [] || cfg.tunnel.ssh.enable);
+            message = "webStack: Cloudflare Tunnel is enabled but no apps are defined in 'tunnel.apps' and SSH is not enabled.";
           }
           {
             assertion = cfg.nginx.enable -> cfg.nginx.apps != [];

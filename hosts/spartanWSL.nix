@@ -2,8 +2,6 @@
 
 let home = "/home/omoper";
   myEmail = "omoper@example.com";
-  nixTalk = builtins.getFlake "github:OswaldoMoper/nixTalk?rev=2c2250d4afb4c5cc7fad5f064694269720129e58";
-  moper   = builtins.getFlake "github:OswaldoMoper/blog?rev=a97f2a0a8fc07f9e99b81bcd65731e9fe2c7f935";
   secrets = builtins.getFlake "git+ssh://git@github.com/redacted/ConfigsSecrets.git?rev=d8f8451cf28c8be59eeb19980f278a2fd897f9f8";
   remote  = secrets.rcs.spartanWSL;
 in
@@ -54,30 +52,6 @@ in
       enable = true;
       credentials = "${home}/.cloudflared/uuid.json";
       useNginx = false;
-      apps = [
-        {
-          name = "nixTalk";
-          domain = "nixTalk.oswaldomoper.com";
-          port = 2000;
-          package = nixTalk;
-          environment = {
-            YESOD_STATIC_DIR = "${home}/nixTalk/static";
-            YESOD_PORT       = "2000";
-            YESOD_APPROOT    = "https://nixTalk.oswaldomoper.com";
-          };
-        }
-        {
-          name = "blog";
-          domain = "oswaldomoper.com";
-          port = 2001;
-          package = moper;
-          environment = {
-            YESOD_STATIC_DIR = "${home}/blog/static";
-            YESOD_PORT       = "2001";
-            YESOD_APPROOT    = "https://oswaldomoper.com";
-          };
-        }
-      ];
       ssh = {
         enable = true;
         domain = "ssh.oswaldomoper.com";
