@@ -2,7 +2,7 @@
 
 let home = "/home/omoper";
   myEmail = "omoper@example.com";
-  secrets = builtins.getFlake "git+ssh://git@github.com/redacted/ConfigsSecrets.git?rev=d8f8451cf28c8be59eeb19980f278a2fd897f9f8";
+  secrets = builtins.getFlake "git+ssh://git@github.com/redacted/ConfigsSecrets.git?rev=4dbad2020ba7df1101e8a71511f93977242f18f1";
   remote  = secrets.rcs.spartanWSL;
 in
 {

@@ -53,6 +53,11 @@ let
         default = "";
         description = "If default, will use '{name}-wrapped'";
       };
+      extraArgs = mkOption {
+        type = types.listOf types.str;
+        default = [];
+        description = "Extra command-line arguments passed to the app binary";
+      };
       environment = mkOption {
         type = types.attrsOf (types.nullOr (types.oneOf [
           types.str
@@ -231,7 +236,7 @@ in
             path = app.path;
             serviceConfig = {
               User = cfg.manager;
-              ExecStart = "${pkg}/bin/${bin} --verbose";
+              ExecStart = "${pkg}/bin/${bin}${lib.optionalString (app.extraArgs != []) " ${lib.escapeShellArgs app.extraArgs}"}";
               Restart = "always";
             };
           };
