@@ -75,6 +75,10 @@ let
         default = [];
         description = "Packages added to the app's 'PATH' environment variable. Both the 'bin' and 'sbin' subdirectories of each package are added.";
       };
+      workDir = mkOption {
+        type = types.str;
+        default = "";
+      };
     };
   };
 in
@@ -190,8 +194,7 @@ in
       };
 
       services.nginx = {
-        enable = (cfg.nginx.enable && cfg.nginx.apps != []) ||
-                 (cfg.tunnel.enable && cfg.tunnel.useNginx);
+        enable = cfg.nginx.enable || (cfg.tunnel.enable && cfg.tunnel.useNginx);
         virtualHosts = lib.mkMerge [
           (mkIf (cfg.nginx.enable && cfg.nginx.apps != []) (
             listToAttrs (map (app: mkVHost { inherit app; enableACME = true; }) cfg.nginx.apps)
@@ -213,34 +216,37 @@ in
                 then "http://${app.domain}" 
                 else "http://localhost:${toString app.port}";
             }) cfg.tunnel.apps))
-            (mkIf cfg.tunnel.ssh.enable {
-                ${cfg.tunnel.ssh.domain} = "ssh://localhost:${toString cfg.tunnel.ssh.port}";
-            })
+            (mkIf cfg.tunnel.ssh.enable (
+              { "${cfg.tunnel.ssh.domain}" = "ssh://localhost:${toString cfg.tunnel.ssh.port}"; }
+            ))
           ];
           default = "http_status:404";
         };
       };
 
-      systemd.services = (listToAttrs (
-        (map (app:
-        let
-          pkg = resolvePackage app;
-          bin = if app.binaryName == "" then "${app.name}-wrapped" else app.binaryName;
-        in {
-          name = app.name;
-          value = {
-            description = "${app.name} web";
-            after = [ "network.target" ];
-            wantedBy = [ "multi-user.target" ];
-            environment = app.environment;
-            path = app.path;
-            serviceConfig = {
-              User = cfg.manager;
-              ExecStart = "${pkg}/bin/${bin}${lib.optionalString (app.extraArgs != []) " ${lib.escapeShellArgs app.extraArgs}"}";
-              Restart = "always";
+      systemd.services = mkMerge [
+        (listToAttrs (map (app:
+          let
+            pkg = resolvePackage app;
+            bin = if app.binaryName == "" then "${app.name}-wrapped" else app.binaryName;
+          in {
+            name = app.name;
+            value = {
+              description = "${app.name} web";
+              after = [ "network.target" ];
+              wantedBy = [ "multi-user.target" ];
+              environment = app.environment;
+              path = app.path;
+              serviceConfig = mkMerge [
+                {
+                  User = cfg.manager;
+                  ExecStart = "${pkg}/bin/${bin}${lib.optionalString (app.extraArgs != []) " ${lib.escapeShellArgs app.extraArgs}"}";
+                  Restart = "always";
+                }
+                (mkIf (app.workDir != "") { WorkingDirectory = app.workDir; })
+              ];
             };
-          };
-        }) (cfg.tunnel.apps ++ cfg.nginx.apps)))
-      );
+          }) (cfg.tunnel.apps ++ cfg.nginx.apps)))
+      ];
     };
   }
