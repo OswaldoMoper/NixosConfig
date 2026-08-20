@@ -4,6 +4,8 @@ let
   inherit (lib) mkIf mkOption mkEnableOption types listToAttrs mkMerge;
   cfg = config.webStack;
 
+  managed = lib.filter (app: app.kind == "managed");
+
   resolvePackage = app:
     if lib.isDerivation app.package
     then app.package
@@ -32,6 +34,18 @@ let
 
   webApp = types.submodule {
     options = {
+      kind = mkOption {
+        type = types.enum [ "managed" "profile" ];
+        default = "managed";
+        description = ''
+          "managed": webStack generates the systemd unit and the nginx virtualHost.
+
+          "profile": the app ships its own NixOS module (services.<app>.profile),
+          which owns the unit and the vhost. webStack only contributes the
+          non-nginx edge — tunnel ingress, firewall, ACME email — and keeps the
+          app inside the global uniqueness assertions.
+        '';
+      };
       name = mkOption {
         type = types.str;
         description = "Internal Service Name";
@@ -45,8 +59,9 @@ let
         description = "Internal port the app listens on";
       };
       package = mkOption {
-        type = types.oneOf [ types.package types.attrs ];
-        description = "Derivation or Flake Input from which to extract the app wrapper";
+        type = types.nullOr (types.oneOf [ types.package types.attrs ]);
+        default = null;
+        description = "Derivation or Flake Input from which to extract the app wrapper. Unused when kind = \"profile\".";
       };
       binaryName = mkOption {
         type = types.str;
@@ -65,7 +80,21 @@ let
           types.package
         ]));
         default = {};
-        description = "Environment variables for the app (same type as systemd.services.environment)";
+        description = ''
+          Environment variables for the app (same type as systemd.services.environment).
+          These end up in the unit file, which is world-readable in the nix store,
+          so secrets belong in 'environmentFile' instead.
+        '';
+      };
+      environmentFile = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "/run/agenix/myapp-env";
+        description = ''
+          Path on the target host to a file of KEY=value lines, read by systemd at
+          start time. Unlike 'environment' it never enters the nix store, so this is
+          where passwords and tokens go.
+        '';
       };
       path = mkOption {
         type = types.listOf (types.oneOf [
@@ -145,6 +174,10 @@ in
             message = "webStack requires a valid email";
           }
           {
+            assertion = lib.all (app: app.kind != "managed" || app.package != null) allApps;
+            message = "webStack: every app with kind = \"managed\" needs a 'package'.";
+          }
+          {
             assertion = allApps != [] || cfg.tunnel.ssh.enable;
             message = "webStack requires at least one app or SSH enabled through the tunnel";
           }
@@ -196,11 +229,11 @@ in
       services.nginx = {
         enable = cfg.nginx.enable || (cfg.tunnel.enable && cfg.tunnel.useNginx);
         virtualHosts = lib.mkMerge [
-          (mkIf (cfg.nginx.enable && cfg.nginx.apps != []) (
-            listToAttrs (map (app: mkVHost { inherit app; enableACME = true; }) cfg.nginx.apps)
+          (mkIf (cfg.nginx.enable && managed cfg.nginx.apps != []) (
+            listToAttrs (map (app: mkVHost { inherit app; enableACME = true; }) (managed cfg.nginx.apps))
           ))
           (mkIf (cfg.tunnel.enable && cfg.tunnel.useNginx) (
-            listToAttrs (map (app: mkVHost { inherit app; enableACME = false; }) cfg.tunnel.apps)
+            listToAttrs (map (app: mkVHost { inherit app; enableACME = false; }) (managed cfg.tunnel.apps))
           ))
         ];
       };
@@ -244,9 +277,10 @@ in
                   Restart = "always";
                 }
                 (mkIf (app.workDir != "") { WorkingDirectory = app.workDir; })
+                (mkIf (app.environmentFile != null) { EnvironmentFile = app.environmentFile; })
               ];
             };
-          }) (cfg.tunnel.apps ++ cfg.nginx.apps)))
+          }) (managed (cfg.tunnel.apps ++ cfg.nginx.apps))))
       ];
     };
   }

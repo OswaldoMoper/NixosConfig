@@ -219,7 +219,7 @@ If the app is a web app that you are going to host, define the following in the 
             nixTalk_UPLOAD     = "/home/<name>/upload";
             nixTalk_APPROOT    = "https://nixTalk.oswaldomoper.com";
             nixTalk_PGUSER     = "a postgres user";
-            nixTalk_PGPASS     = "an encrypted password";
+            # Secrets go in environmentFile, never here — `environment` lands in the nix store.
             nixTalk_PGHOST     = "localhost or your db host";
             nixTalk_PGPORT     = "5432 or the port you use";
             nixTalk_PGDATABASE = "nixTalk or the name of your database";
