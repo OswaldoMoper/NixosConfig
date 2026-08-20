@@ -108,6 +108,28 @@ let
         type = types.str;
         default = "";
       };
+      database = mkOption {
+        type = types.nullOr (types.submodule {
+          options = {
+            name = mkOption {
+              type = types.str;
+              description = "PostgreSQL database the app connects to.";
+            };
+            user = mkOption {
+              type = types.str;
+              description = "PostgreSQL role the app connects as.";
+            };
+          };
+        });
+        default = null;
+        example = { name = "myapp"; user = "myapp"; };
+        description = ''
+          Declares that the app needs the host's PostgreSQL. Today this orders the
+          unit after postgresql.service and lets the pre-deploy checks verify that
+          'environment' really carries these names. Provisioning the role and the
+          database from here is the next step.
+        '';
+      };
     };
   };
 in
@@ -266,7 +288,10 @@ in
             name = app.name;
             value = {
               description = "${app.name} web";
-              after = [ "network.target" ];
+              # `after` without `requires`: if postgres fails the app still starts
+              # and retries, instead of waiting for an event systemd won't send.
+              after = [ "network.target" ]
+                ++ lib.optional (app.database != null) "postgresql.service";
               wantedBy = [ "multi-user.target" ];
               environment = app.environment;
               path = app.path;
