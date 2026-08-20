@@ -2,17 +2,14 @@
 
 let home = "/home/omoper";
   myEmail = "omoper@example.com";
-  secrets = builtins.getFlake "git+ssh://git@github.com/redacted/ConfigsSecrets.git?rev=4dbad2020ba7df1101e8a71511f93977242f18f1";
-  remote  = secrets.rcs.spartanWSL;
 in
 {
   imports = [ ./hardware/WSL.nix ];
 
-  deployment = secrets.deployment;
-
-  services.openssh.settings = lib.mkMerge [
-    remote.services.openssh.settings
-  ];
+  services.openssh.settings = {
+    PasswordAuthentication = false;
+    AllowUsers = [ "omoper" "guest" ];
+  };
 
   myUsers = lib.mkMerge [
     {
@@ -41,7 +38,35 @@ in
         };
       };
     }
-    remote.myUsers
+    {
+      guest = {
+        enable = true;
+        native.description = "Guest User";
+        email = "user@example.com";
+        home = {
+          enable = true;
+          git = {
+            enable = true;
+            tag = "LupitaZP";
+          };
+          msmtp = {
+            enable = true;
+            passwordFile = "/home/guest/password.txt";
+          };
+          sshKeys = {
+            enable = true;
+            names = [
+              "id_ed25519"
+              "id_25519"
+            ];
+          };
+        };
+        native.openssh.authorizedKeys.keys = [
+          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJm3IcBc1AhUqWxBbPRbV0R8l+hVhvb3jbE3mH53xDf2 omoper@spartanWSL"
+          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA guest@conect"
+        ];
+      };
+    }
   ];
   # Web Hosting Service
   webStack = {
@@ -131,6 +156,11 @@ in
         trusted-users = [ "root" "omoper" ];
       };
     }
-    remote.nix
+    {
+      settings = {
+        allowed-users = [ "guest" ];
+        trusted-users = [ "guest" ];
+      };
+    }
   ];
 }
