@@ -115,6 +115,8 @@ in
       # Requisites for oswaldomoper.com
       cloudflared
       sops
+      # Requisites for secrets
+      inputs.agenix.packages.${pkgs.stdenv.hostPlatform.system}.default
       # Requisites for deploying tools
       inputs.deploy-rs.packages.${pkgs.stdenv.hostPlatform.system}.default
       self.packages.${pkgs.stdenv.hostPlatform.system}.deploy-migration

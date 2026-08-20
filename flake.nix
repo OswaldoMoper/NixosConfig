@@ -12,6 +12,10 @@
       url = "github:serokell/deploy-rs";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    agenix = {
+      url = "github:ryantm/agenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
   outputs = inputs@ { self
                     , nixpkgs
@@ -19,6 +23,7 @@
                     , flake-utils
                     , home-manager
                     , deploy-rs
+                    , agenix
                     , ... }:
   let
     system = "x86_64-linux";
@@ -27,6 +32,7 @@
     modules = [
         nixos-wsl.nixosModules.default
         home-manager.nixosModules.home-manager
+        agenix.nixosModules.default
         (import ./nixosModules/common.nix)
         (import ./nixosModules/graphical.nix)
         (import ./nixosModules/webstack.nix)
