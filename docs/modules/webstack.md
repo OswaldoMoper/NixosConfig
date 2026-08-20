@@ -157,17 +157,73 @@ Each app in `nginx.apps` or `tunnel.apps` has:
 
 ```Nix
 {
+  # "managed" (default) or "profile" — see below
+  kind = "managed";
   name = "myapp";
   domain = "myapp.example.com";
   port = 3000;
-  # Derivation OR flake input
+  # Derivation OR flake input. Required for "managed", unused for "profile"
   package = inputs.myapp;
   # Optional binary override
   binaryName = "myapp-custom";
-  # Environment variables
+  # Non-secret environment variables
   environment = { ... };
+  # Secrets: a file of KEY=value lines on the target host
+  environmentFile = "/run/agenix/myapp-env";
   # Packages added to PATH (bin + sbin)
   path = [ pkgs.git pkgs.curl ];
+  # Optional working directory
+  workDir = "/var/lib/myapp";
+  # Extra command-line arguments
+  extraArgs = [ "--verbose" ];
+}
+```
+
+### `kind`: two shapes of app
+
+| | `"managed"` (default) | `"profile"` |
+| --- | --- | --- |
+| Systemd unit | webStack generates it | the app's own module |
+| nginx virtualHost | webStack generates it | the app's own module |
+| Cloudflare tunnel ingress | webStack | **webStack** |
+| Firewall, ACME email | webStack | **webStack** |
+| Uniqueness assertions | webStack | **webStack** |
+| `package` | required | unused |
+
+Use `"managed"` for a single-binary app: give it a package and some environment and
+webStack does the rest. Use `"profile"` for an app that ships its own NixOS module
+with a `services.<app>.profile` interface — it owns its unit, its vhost, its secrets
+and its database wiring, and webStack contributes only the edge it does not own.
+
+The point of listing a `"profile"` app here at all is the last three rows: without an
+entry, a port or domain collision between it and anything else on the host goes
+unnoticed until deployment. With one, it fails during evaluation.
+
+```Nix
+{
+  webStack.nginx.apps = [
+    { name = "blog"; domain = "example.com"; port = 2001; package = inputs.blog; }
+    { kind = "profile"; name = "xpsoasis"; domain = "xpsoasis.org"; port = 3003; }
+  ];
+  services.xpsoasis.profile = {
+    enable = true;
+    mode = "production";
+    serverName = "xpsoasis.org";
+    ports.backend = 3003;
+  };
+}
+```
+
+### Secrets
+
+`environment` is rendered into the systemd unit, which lives world-readable in the nix
+store. Anything secret belongs in `environmentFile`, a path on the target host that
+systemd reads at start time and that never enters the store:
+
+```Nix
+{
+  environment = { MYAPP_PGUSER = "myapp"; MYAPP_PGDATABASE = "myapp"; };
+  environmentFile = "/run/agenix/myapp-env";   # contains MYAPP_PGPASS=…
 }
 ```
 
@@ -183,20 +239,26 @@ The wrapper is resolved automatically.
 
 ## Systemd Services
 
-Each app (of nginx or tunnel) generates a service:
+Each **`managed`** app (of nginx or tunnel) generates a service. `profile` apps do not:
+their own module owns the unit.
 
 - Name: `app.name`
 - User: `webStack.manager`
 - Variables: `app.environment`
+- Secrets file: `app.environmentFile`, if set
 - Extended PATH: `app.path`
+- Working directory: `app.workDir`, if set
 - Binary:
   - If `binaryName = ""` -> `${name}-wrapped`
   - If defined -> use this name
 
 ```Nix
 {
-  ExecStart = "${pkg}/bin/${bin} --verbose";
+  ExecStart = "${pkg}/bin/${bin} ${escapeShellArgs app.extraArgs}";
   Restart = "always";
+  # only when the corresponding option is set
+  WorkingDirectory = app.workDir;
+  EnvironmentFile = app.environmentFile;
 }
 ```
 
@@ -205,6 +267,7 @@ Each app (of nginx or tunnel) generates a service:
 The module enforces:
 
 - The `email` must not be empty
+- Every app with `kind = "managed"` must have a `package`
 - `nginx.apps` or `tunnel.apps` must not be empty when `nginx` or `tunnel` enabled respectively
 - All app ports must be unique
 - All app domains must be unique
@@ -276,7 +339,7 @@ These are implemented via Nix assertions.
             nixTalk_APPROOT    = "https://nixTalk.oswaldomoper.com";
             # if your app uses postgres
             nixTalk_PGUSER     = "omoper";
-            nixTalk_PGPASS     = "your password";
+            # Secrets go in environmentFile, never here — `environment` lands in the nix store.
             nixTalk_PGHOST     = "localhost"; # or your dbhost
             nixTalk_PGPORT     = "5432"; # or the port you use
             nixTalk_PGDATABASE = "nixTalk";
@@ -316,7 +379,7 @@ These are implemented via Nix assertions.
             example_APPROOT    = "https://myapp.example.com";
             # if your app uses postgres
             example_PGUSER     = "your postgres user";
-            example_PGPASS     = "your password";
+            # Secrets go in environmentFile, never here — `environment` lands in the nix store.
             example_PGHOST     = "localhost"; # or your dbhost
             example_PGPORT     = "5432"; # or the port you use
             example_PGDATABASE = "your database name";

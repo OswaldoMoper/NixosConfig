@@ -221,7 +221,7 @@ in {
           nixTalk_UPLOAD     = "${home}/upload";
           nixTalk_APPROOT    = "https://nixTalk.oswaldomoper.com";
           nixTalk_PGUSER     = "omoper";
-          nixTalk_PGPASS     = "an encrypted password";
+          # Secrets go in environmentFile, never here — `environment` lands in the nix store.
           nixTalk_PGHOST     = "localhost";
           nixTalk_PGPORT     = "5432";
           nixTalk_PGDATABASE = "nixTalk";
@@ -287,7 +287,7 @@ Servers typically enable:
           nixTalk_UPLOAD     = "/home/example/upload";
           nixTalk_APPROOT    = "https://domain.com";
           nixTalk_PGUSER     = "omoper";
-          nixTalk_PGPASS     = "an encrypted password";
+          # Secrets go in environmentFile, never here — `environment` lands in the nix store.
           nixTalk_PGHOST     = "localhost";
           nixTalk_PGPORT     = "5432";
           nixTalk_PGDATABASE = "nixTalk";
@@ -354,7 +354,7 @@ Servers typically enable:
           nixTalk_UPLOAD     = "/home/omoper/upload";
           nixTalk_APPROOT    = "https://nixTalk.oswaldomoper.com";
           nixTalk_PGUSER     = "omoper";
-          nixTalk_PGPASS     = "an encrypted password";
+          # Secrets go in environmentFile, never here — `environment` lands in the nix store.
           nixTalk_PGHOST     = "localhost";
           nixTalk_PGPORT     = "5432";
           nixTalk_PGDATABASE = "nixTalk";
