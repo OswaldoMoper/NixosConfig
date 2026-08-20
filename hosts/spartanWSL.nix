@@ -34,6 +34,7 @@ in
               enable = true;
               name = "OswaldoMoper";
             };
+            names = [ "id_ed25519" ];
           };
         };
       };
