@@ -23,6 +23,7 @@
   let
     system = "x86_64-linux";
     lib = nixpkgs.lib;
+    myLib = import ./lib { inherit lib; };
     modules = [
         nixos-wsl.nixosModules.default
         home-manager.nixosModules.home-manager
@@ -54,24 +55,8 @@
       }) hostFiles);
   in {
     inherit nixosConfigurations;
-    deploy.nodes = let
-      nodesByHost = lib.mapAttrs (hostName: hostConfig:
-        if (hostConfig.config ? deployment) then hostConfig.config.deployment else {}
-      ) nixosConfigurations;
-      flattenedNodes = lib.foldl' (acc: hostName:
-        let
-          hostDeployment = nodesByHost.${hostName};
-          processedNodes = lib.mapAttrs (nodeName: nodeSettings: {
-            inherit (nodeSettings) hostname fastConnection;
-            profiles = lib.mapAttrs (profileName: profileSettings: {
-              inherit (profileSettings) sshUser user path;
-            }) nodeSettings.profiles;
-          }) hostDeployment;
-        in
-          acc // processedNodes
-      ) {} (lib.attrNames nodesByHost);
-
-    in flattenedNodes;
+    lib = myLib;
+    deploy.nodes = myLib.mkDeployNodes nixosConfigurations;
     packages.${system} = let
       pkgs = nixpkgs.legacyPackages.${system};
       rebuildMigration = builtins.readFile ./scripts/nixos-rebuild-migration.sh;
