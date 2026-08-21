@@ -70,6 +70,23 @@ in
               description = "SSH key names for auto-loading";
             };
           };
+          sshHosts = mkOption {
+            type = types.attrsOf (types.attrsOf types.anything);
+            default = {};
+            example = {
+              "203.0.113.7" = { User = "root"; IdentitiesOnly = true; };
+            };
+            description = ''
+              Per-host ssh_config blocks, as host pattern -> directives. The
+              attribute names are written verbatim; ssh_config keywords are
+              case-insensitive.
+
+              Note that IdentityFile accumulates across every matching block,
+              so a host block adds to the global ones rather than replacing
+              them. IdentitiesOnly is what stops ssh also offering every key
+              in the agent, which is what trips a server's MaxAuthTries.
+            '';
+          };
         };
       };
     }));
@@ -143,13 +160,15 @@ in
       programs.ssh = {
         enable = true;
         enableDefaultConfig = false;
-        settings."*" = {
-          AddKeysToAgent = "yes";
-          identityFile = [
-            "~/.ssh/${cfg.home.sshKeys.baseName.name}_ed25519"
-            "~/.ssh/${cfg.home.sshKeys.baseName.name}"
-            "~/.ssh/${cfg.home.sshKeys.baseName.name}_rsa"
-          ] ++ (map (key: "~/.ssh/${key}") cfg.home.sshKeys.names);
+        settings = cfg.home.sshHosts // {
+          "*" = {
+            AddKeysToAgent = "yes";
+            identityFile = [
+              "~/.ssh/${cfg.home.sshKeys.baseName.name}_ed25519"
+              "~/.ssh/${cfg.home.sshKeys.baseName.name}"
+              "~/.ssh/${cfg.home.sshKeys.baseName.name}_rsa"
+            ] ++ (map (key: "~/.ssh/${key}") cfg.home.sshKeys.names);
+          };
         };
       };
       imports =

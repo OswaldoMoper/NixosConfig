@@ -17,7 +17,6 @@ in
         enable = true;
         native.description = "Oswaldo Moper";
         email = myEmail;
-        # native.hashedPassword = "$6$IqhGanTrCJ3Y8GMS$2.q7j7DfXCbEEo1zUNkQTsSL5JuPpZbM4AghPXdycMBL6Hond51SCECELA7ufpbdrlq/u5UY/91Ph4Pu5Q/GW.";
         home = {
           enable = true;
           git = {
@@ -35,6 +34,11 @@ in
               name = "OswaldoMoper";
             };
             names = [ "id_ed25519" ];
+          };
+          sshHosts."203.0.113.7" = {
+            User = "root";
+            IdentityFile = [ "~/.ssh/id_ed25519" ];
+            IdentitiesOnly = true;
           };
         };
       };
