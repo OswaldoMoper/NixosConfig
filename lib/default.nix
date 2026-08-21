@@ -2,7 +2,11 @@
 
 {
   mkPreDeployApps =
-    { pkgs, nixosConfigurations }:
+    {
+      pkgs,
+      nixosConfigurations,
+      deployPkg ? null,
+    }:
     let
       sshUserOf =
         node:
@@ -17,7 +21,7 @@
           "root";
 
       forHost =
-        _hostName: hostConfig:
+        hostName: hostConfig:
         let
           cfg = hostConfig.config;
           nodes = if cfg ? deployment then cfg.deployment else { };
@@ -25,39 +29,83 @@
           units = map (a: a.name) (lib.filter (a: a.kind == "managed") apps);
           databases = map (a: a.database.name) (lib.filter (a: a.database != null) apps);
           pg = cfg.services.postgresql;
-        in
-        lib.mapAttrs' (
-          nodeName: node:
-          let
-            name = "pre-deploy-${nodeName}-live";
-          in
-          lib.nameValuePair name {
-            type = "app";
-            program = lib.getExe (
-              pkgs.writeShellApplication {
-                inherit name;
-                runtimeInputs = with pkgs; [ coreutils gnugrep openssh ];
-                excludeShellChecks = [ "SC2029" ];
-                text = ''
-                  # Host and user stay overridable so the checks can be pointed at
-                  # a staging box, or at localhost to exercise the script itself.
-                  : "''${PRE_DEPLOY_HOST:=${node.hostname}}"
-                  : "''${PRE_DEPLOY_SSH_USER:=${sshUserOf node}}"
-                  export PRE_DEPLOY_HOST PRE_DEPLOY_SSH_USER
-                  export PRE_DEPLOY_NODE=${lib.escapeShellArg nodeName}
-                  export PRE_DEPLOY_PG_MAJOR=${
-                    lib.escapeShellArg (if pg.enable then lib.versions.major pg.package.version else "")
-                  }
-                  export PRE_DEPLOY_DATA_DIR=${lib.escapeShellArg pg.dataDir}
-                  export PRE_DEPLOY_UNITS=${lib.escapeShellArg (lib.concatStringsSep " " units)}
-                  export PRE_DEPLOY_DATABASES=${lib.escapeShellArg (lib.concatStringsSep " " databases)}
 
-                  ${builtins.readFile ../scripts/pre-deploy-live.sh}
-                '';
-              }
-            );
-          }
-        ) nodes;
+          liveCheck =
+            nodeName: node: mode:
+            pkgs.writeShellApplication {
+              name = "${mode}-${nodeName}-live";
+              runtimeInputs = with pkgs; [ coreutils gnugrep openssh ];
+              excludeShellChecks = [ "SC2029" ];
+              text = ''
+                # Host and user stay overridable so the checks can be pointed at
+                # a staging box, or at localhost to exercise the script itself.
+                : "''${LIVE_HOST:=${node.hostname}}"
+                : "''${LIVE_SSH_USER:=${sshUserOf node}}"
+                export LIVE_HOST LIVE_SSH_USER
+                export LIVE_MODE=${lib.escapeShellArg mode}
+                export LIVE_NODE=${lib.escapeShellArg nodeName}
+                export LIVE_PG_MAJOR=${
+                  lib.escapeShellArg (if pg.enable then lib.versions.major pg.package.version else "")
+                }
+                export LIVE_DATA_DIR=${lib.escapeShellArg pg.dataDir}
+                export LIVE_UNITS=${lib.escapeShellArg (lib.concatStringsSep " " units)}
+                export LIVE_DATABASES=${lib.escapeShellArg (lib.concatStringsSep " " databases)}
+
+                ${builtins.readFile ../scripts/live-checks.sh}
+              '';
+            };
+
+          gate =
+            nodeName: node:
+            pkgs.writeShellApplication {
+              name = "deploy-${nodeName}";
+              runtimeInputs = [
+                pkgs.coreutils
+                pkgs.nix
+                pkgs.openssh
+                deployPkg
+              ];
+              text = ''
+                export GATE_FLAKE="''${GATE_FLAKE:-.}"
+                export GATE_NODE=${lib.escapeShellArg nodeName}
+                export GATE_HOST=${lib.escapeShellArg hostName}
+                export GATE_PRE_DEPLOY=${lib.getExe (liveCheck nodeName node "pre-deploy")}
+                export GATE_VERIFY=${lib.getExe (liveCheck nodeName node "verify")}
+
+                ${builtins.readFile ../scripts/deploy-gate.sh}
+              '';
+            };
+
+          checkApps = lib.concatMapAttrs (
+            nodeName: node:
+            lib.listToAttrs (
+              map
+                (
+                  mode:
+                  let
+                    pkg = liveCheck nodeName node mode;
+                  in
+                  lib.nameValuePair pkg.name {
+                    type = "app";
+                    program = lib.getExe pkg;
+                  }
+                )
+                [
+                  "pre-deploy"
+                  "verify"
+                ]
+            )
+          ) nodes;
+
+          gateApps = lib.mapAttrs' (
+            nodeName: node:
+            lib.nameValuePair "deploy-${nodeName}" {
+              type = "app";
+              program = lib.getExe (gate nodeName node);
+            }
+          ) nodes;
+        in
+        checkApps // lib.optionalAttrs (deployPkg != null) gateApps;
     in
     lib.foldl' (acc: h: acc // forHost h nixosConfigurations.${h}) { } (
       lib.attrNames nixosConfigurations
@@ -81,9 +129,14 @@
         acc
         // lib.mapAttrs (_: node: {
           inherit (node) hostname fastConnection;
-          profiles = lib.mapAttrs (_: profile: {
-            inherit (profile) sshUser user path;
-          }) node.profiles;
+          profiles = lib.mapAttrs (
+            _: profile:
+            {
+              inherit (profile) sshUser user path;
+            }
+            // lib.optionalAttrs (profile.magicRollback != null) { inherit (profile) magicRollback; }
+            // lib.optionalAttrs (profile.autoRollback != null) { inherit (profile) autoRollback; }
+          ) node.profiles;
         }) byHost.${hostName}
       ) { } hosts;
     in
