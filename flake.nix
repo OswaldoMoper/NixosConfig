@@ -65,11 +65,23 @@
     deploy.nodes = myLib.mkDeployNodes nixosConfigurations;
     packages.${system} = let
       pkgs = nixpkgs.legacyPackages.${system};
-      rebuildMigration = builtins.readFile ./scripts/nixos-rebuild-migration.sh;
-      deployMigration = builtins.readFile ./scripts/deploy-migration.sh;
+      common = with pkgs; [ coreutils gnugrep gawk util-linux systemd ];
     in {
-      nixos-rebuild-migration = pkgs.writeShellScriptBin "nixos-rebuild-migration" rebuildMigration;
-      deploy-migration = pkgs.writeShellScriptBin "deploy-migration" deployMigration;
+      nixos-rebuild-migration = pkgs.writeShellApplication {
+        name = "nixos-rebuild-migration";
+        runtimeInputs = common ++ [ pkgs.nixos-rebuild ];
+        text = builtins.readFile ./scripts/nixos-rebuild-migration.sh;
+      };
+      deploy-migration = pkgs.writeShellApplication {
+        name = "deploy-migration";
+        excludeShellChecks = [ "SC2029" ];
+        runtimeInputs = common ++ [
+          pkgs.nix
+          pkgs.openssh
+          deploy-rs.packages.${system}.default
+        ];
+        text = builtins.readFile ./scripts/deploy-migration.sh;
+      };
     };
     nixosModules = let
         moduleDir = ./nixosModules;

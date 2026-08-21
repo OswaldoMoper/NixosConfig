@@ -1,91 +1,78 @@
-#!/usr/bin/env zsh
-set -e
-
-TARGET_USER=${SUDO_USER:-$USER}
-
-USER_HOME=$(getent passwd "$TARGET_USER" | cut -d: -f6)
+TARGET_USER="${SUDO_USER:-$USER}"
+USER_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
 
 if [ -z "$USER_HOME" ] || [ ! -d "$USER_HOME" ]; then
-    echo "ERROR: No se pudo determinar un directorio HOME válido para $TARGET_USER"
-    exit 1
+  echo "ERROR: no valid HOME for ${TARGET_USER}" >&2
+  exit 1
 fi
+
+BACKUP="${USER_HOME}/backups/postgres_backup.sql"
+LOCAL_COPY="${USER_HOME}/postgres_backup_local.sql"
 
 log() {
-  echo "[$(date)] - $1" | tee -a "$USER_HOME/postgres_migration.log"
-}
-perform_migration() {
-  log "INFO: Starting PostgreSQL restore..."
-
-  if [ -s $USER_HOME/backups/postgres_backup.sql ]; then
-    log "INFO: Restoring PostgreSQL database..."
-    if ! grep -q "PostgreSQL database dump" "$USER_HOME/backups/postgres_backup.sql"; then
-        log "ERROR: Backup file appears to be invalid or corrupted. Aborting migration."
-        exit 1
-    else
-      psql -U postgres < $USER_HOME/backups/postgres_backup.sql || {
-        log "ERROR: Restore failed. Aborting migration."
-        exit 1
-      }
-    fi
-  else
-    log "ERROR: Backup file is empty or missing ($USER_HOME/backups/postgres_backup.sql). Aborting migration."
-    exit 1
-  fi
-
-  log "INFO: Restore completed..."
-  rm -f $USER_HOME/backups/postgres_backup.sql
-  # psql -d ${TARGET_USER} -c '\dt' # refactor this
-  log "INFO: PostgreSQL migration script executed. Backup directory: $USER_HOME/postgres_backup_local.sql"
+  echo "[$(date --iso-8601=seconds)] $1" | tee -a "${USER_HOME}/postgres_migration.log"
 }
 
-postgresql_version_before=$(psql --version | awk '{print $3}' || {
-  log "ERROR: Could not retrieve PostgreSQL version before nixos-rebuild. Exiting."
+server_major() {
+  runuser -u postgres -- psql -tAc 'SHOW server_version_num' | tr -d '[:space:]'
+}
+
+before="$(server_major)"
+if ! [[ "$before" =~ ^[0-9]+$ ]]; then
+  log "ERROR: could not read the local PostgreSQL version; aborting"
   exit 1
-})
+fi
+log "PostgreSQL server_version_num before rebuild: ${before}"
 
-log "INFO: PostgreSQL version before nixos-rebuild: $postgresql_version_before. Backing up PostgreSQL..."
-mkdir -p $USER_HOME/backups && pg_dumpall -U postgres > $USER_HOME/backups/postgres_backup.sql || {
-  log "ERROR: Backup failed. Aborting nixos-rebuild."
+log "backing up to ${BACKUP}"
+mkdir -p "${USER_HOME}/backups"
+runuser -u postgres -- pg_dumpall > "$BACKUP" || {
+  log "ERROR: backup failed; rebuild cancelled"
+  exit 1
+}
+cp "$BACKUP" "$LOCAL_COPY" || {
+  log "ERROR: could not copy the backup to ${LOCAL_COPY}; rebuild cancelled"
   exit 1
 }
 
-log "INFO: Backup completed. Copying backup locally..."
-cp $USER_HOME/backups/postgres_backup.sql $USER_HOME/postgres_backup_local.sql || {
-  log "ERROR: Backup copy failed. Aborting nixos-rebuild."
-  exit 1
-}
-
-log "INFO: Backup copied in $USER_HOME/postgres_backup_local.sql. Running nixos-rebuild..."
+log "running nixos-rebuild $*"
 nixos-rebuild "$@" || {
-  log "ERROR: Could not execute nixos-rebuild. Aborting migration. See nix logs for details."
+  log "ERROR: nixos-rebuild failed; migration cancelled"
   exit 1
 }
 
-log "INFO: Rebuild completed. Initializing Zsh..."
-if [ ! -f "$USER_HOME"/.zshrc ]; then
-  touch "$USER_HOME"/.zshrc
+if ! systemctl is-active --quiet postgresql; then
+  log "WARN: postgresql is not active after the rebuild; restarting"
+  systemctl restart postgresql || {
+    log "ERROR: could not restart postgresql; manual intervention needed"
+    exit 1
+  }
 fi
 
-if ! systemctl is-active postgresql > /dev/null 2>&1; then
-    log "WARN: PostgreSQL service is not running after nixos-rebuild. Attempting restart..."
-    systemctl restart postgresql || {
-        log "ERROR: Unable to restart PostgreSQL. Manual intervention may be required."
-        exit 1
-    }
-fi
-
-log "INFO: Zsh has been initialized successfully. Checking if restore is needed..."
-postgresql_version_after=$(psql --version | awk '{print $3}' || {
-  log "ERROR: Could not retrieve PostgreSQL version after nixos-rebuild. Exiting."
+after="$(server_major)"
+if ! [[ "$after" =~ ^[0-9]+$ ]]; then
+  log "ERROR: could not read the PostgreSQL version after the rebuild"
   exit 1
-})
-
-if [[ "$(echo -e "$postgresql_version_before\n$postgresql_version_after" | sort -V | head -n1)" == "$postgresql_version_before"  && "$postgresql_version_before" != "$postgresql_version_after" ]]; then
-  log "INFO: PostgreSQL version upgraded from $postgresql_version_before to $postgresql_version_after."
-  perform_migration
-  if ! psql -U postgres -c "SELECT 1;" > /dev/null 2>&1; then
-      log "ERROR: PostgreSQL might not be running correctly after restoration. Consider manual verification."
-  fi
-else
-  log "INFO: PostgreSQL version remains unchanged or downgraded ($postgresql_version_before → $postgresql_version_after). No migration required."
 fi
+log "PostgreSQL server_version_num after rebuild: ${after}"
+
+if [ "$after" -le "$before" ]; then
+  log "version unchanged or downgraded (${before} -> ${after}); no restore needed"
+  exit 0
+fi
+
+log "version upgraded (${before} -> ${after}); restoring into the fresh cluster"
+if [ ! -s "$BACKUP" ]; then
+  log "ERROR: ${BACKUP} is missing or empty; restore aborted"
+  exit 1
+fi
+if ! grep -q "PostgreSQL database dump" "$BACKUP"; then
+  log "ERROR: ${BACKUP} does not look like a pg_dumpall output; restore aborted"
+  exit 1
+fi
+runuser -u postgres -- psql -f "$BACKUP" postgres || {
+  log "ERROR: restore failed"
+  exit 1
+}
+rm -f "$BACKUP"
+log "restore complete; copy kept at ${LOCAL_COPY}"
