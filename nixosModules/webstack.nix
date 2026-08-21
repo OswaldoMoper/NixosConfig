@@ -108,6 +108,18 @@ let
         type = types.str;
         default = "";
       };
+      tls = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Serve the app over TLS with an ACME certificate.
+
+          For kind = "profile" this enables enableACME, forceSSL and the 443
+          listener on the virtualHost the app's own module created, without
+          taking over its locations. "managed" apps in nginx.apps already get
+          this from webStack, so it is only meaningful for profiles.
+        '';
+      };
       database = mkOption {
         type = types.nullOr (types.submodule {
           options = {
@@ -153,6 +165,16 @@ in
           type = types.listOf webApp;
           default = [];
           description = "List of web apps";
+        };
+        redirects = mkOption {
+          type = types.attrsOf types.str;
+          default = {};
+          example = { "old.example.com" = "https://new.example.com"; };
+          description = ''
+            Domains that only redirect somewhere else, as domain -> target.
+            Each becomes an ACME/TLS virtualHost returning 301, and counts
+            towards the global domain uniqueness assertions.
+          '';
         };
       };
 
@@ -231,6 +253,7 @@ in
             assertion = 
               let
                 domains = (map (a: a.domain) allApps)
+                  ++ (builtins.attrNames cfg.nginx.redirects)
                   ++ (lib.optional cfg.tunnel.ssh.enable cfg.tunnel.ssh.domain);
               in builtins.length (lib.unique domains) == builtins.length domains;
             message = "webStack: Each service must have a unique domain.";
@@ -249,7 +272,8 @@ in
       };
 
       services.nginx = {
-        enable = cfg.nginx.enable || (cfg.tunnel.enable && cfg.tunnel.useNginx);
+        enable = cfg.nginx.enable || (cfg.tunnel.enable && cfg.tunnel.useNginx)
+          || cfg.nginx.redirects != {};
         virtualHosts = lib.mkMerge [
           (mkIf (cfg.nginx.enable && managed cfg.nginx.apps != []) (
             listToAttrs (map (app: mkVHost { inherit app; enableACME = true; }) (managed cfg.nginx.apps))
@@ -257,6 +281,23 @@ in
           (mkIf (cfg.tunnel.enable && cfg.tunnel.useNginx) (
             listToAttrs (map (app: mkVHost { inherit app; enableACME = false; }) (managed cfg.tunnel.apps))
           ))
+          # Profile apps own their vhost; we only add TLS to it.
+          (listToAttrs (map (app: {
+            name = app.domain;
+            value = {
+              enableACME = true;
+              forceSSL = true;
+              listen = [
+                { addr = "0.0.0.0"; port = 443; ssl = true; }
+                { addr = "[::]";    port = 443; ssl = true; }
+              ];
+            };
+          }) (lib.filter (a: a.kind == "profile" && a.tls) (cfg.tunnel.apps ++ cfg.nginx.apps))))
+          (lib.mapAttrs (_: target: {
+            enableACME = true;
+            forceSSL = true;
+            locations."/".return = "301 ${target}$request_uri";
+          }) cfg.nginx.redirects)
         ];
       };
 
