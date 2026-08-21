@@ -1,78 +1,74 @@
-#!/usr/bin/env zsh
-set -e
+FLAKE="${DEPLOY_MIGRATION_FLAKE:-.}"
 
-TARGET=$(echo "$1" | sed 's/\.#//')
+if [ "$#" -ne 1 ]; then
+  echo "usage: deploy-migration <node>   (flake via DEPLOY_MIGRATION_FLAKE, default .)" >&2
+  exit 2
+fi
 
-HOST=$(nix eval --raw .#deploy.nodes.${TARGET}.hostname)
-USER=$(nix eval --raw .#deploy.nodes.${TARGET}.profiles.system.sshUser)
-REMOTE_HOME=$(ssh "${USER}@${HOST}" "getent passwd ${USER} | cut -d: -f6")
+TARGET="${1#.#}"
 
-APP=${REMOTE_HOME//\/home\//}
-
-SSH_SERVER="ssh ${USER}@${HOST}"
-SCP_SERVER="scp ${USER}@${HOST}:"
-
-DEPLOY_CMD="deploy .#${TARGET}"
+HOST="$(nix eval --raw "${FLAKE}#deploy.nodes.${TARGET}.hostname")"
+SSH_USER="$(nix eval --raw "${FLAKE}#deploy.nodes.${TARGET}.profiles.system.sshUser")"
+REMOTE="${SSH_USER}@${HOST}"
+REMOTE_HOME="$(ssh "$REMOTE" "getent passwd ${SSH_USER} | cut -d: -f6")"
+BACKUP="${REMOTE_HOME}/backups/postgres_deploy_backup.sql"
+LOCAL_COPY="${HOME}/postgres_backup_${TARGET}.sql"
 
 log() {
-  echo "[$(date)] - $1" | tee -a "$HOME/deploy_migration.log"
+  echo "[$(date --iso-8601=seconds)] $1" | tee -a "${HOME}/deploy_migration.log"
 }
 
-log "TARGET: ${TARGET}"
-log "HOST: ${HOST}"
-log "USER: ${USER}"
-log "REMOTE_HOME: ${REMOTE_HOME}"
-log "APP: ${APP}"
-log "SSH_SERVER: ${SSH_SERVER}"
-log "SCP_SERVER: ${SCP_SERVER}"
-log "DEPLOY_CMD: ${DEPLOY_CMD}"
-
-perform_migration() {
-  log "INFO: Starting PostgreSQL restore on the remote server..."
-  
-  $SSH_SERVER "set -e; if [ -s ${REMOTE_HOME}/backups/postgres_deploy_backup.sql ]; then psql -U postgres < ${REMOTE_HOME}/backups/postgres_deploy_backup.sql; else echo 'ERROR: No valid backup found in ${REMOTE_HOME}/backups/postgres_backup.sql' >&2; exit 1; fi" || {
-    log "ERROR: Remote server restore failed. Migration canceled."
-    exit 1
-  }
-
-  log "INFO: Restore completed on remote server."
-  $SSH_SERVER "rm -f ${REMOTE_HOME}/backups/postgres_deploy_backup.sql"
-  # $SSH_SERVER "psql -d ${APP} -c '\dt'" refactor this
-  log "INFO: PostgreSQL migration script executed. Backup directory: $HOME/postgres_backup_${APP}.sql"
+server_major() {
+  ssh "$REMOTE" "sudo -u postgres psql -tAc 'SHOW server_version_num'" | tr -d '[:space:]'
 }
 
-postgresql_version_before=$($SSH_SERVER "psql --version" | awk '{print $3}' || {
-  log "ERROR: Could not retrieve PostgreSQL version before deploy. Exiting."
-  exit 1
-})
+log "target=${TARGET} host=${HOST} user=${SSH_USER} backup=${BACKUP}"
 
-log "INFO: PostgreSQL version before deploy: $postgresql_version_before. Backing up PostgreSQL on the remote server..."
-$SSH_SERVER "mkdir -p ${REMOTE_HOME}/backups && pg_dumpall -U postgres > ${REMOTE_HOME}/backups/postgres_deploy_backup.sql" || {
-  log "ERROR: Remote server backup failed. Deployment is being canceled."
+before="$(server_major)"
+if ! [[ "$before" =~ ^[0-9]+$ ]]; then
+  log "ERROR: could not read the remote PostgreSQL version; aborting"
   exit 1
-}
-
-log "INFO: Backup completed on remote server. Downloading backup..."
-$SCP_SERVER"${REMOTE_HOME}/backups/postgres_deploy_backup.sql" "$HOME/postgres_backup_${APP}.sql" || {
-  log "ERROR: Backup download failed. Deployment is being canceled."
-  exit 1
-}
-
-log "INFO: Backup downloaded in $HOME/postgres_backup_${APP}.sql. Deployment running..."
-$DEPLOY_CMD || {
-  log "ERROR: Deployment failed. Migration canceled."
-  exit 1
-}
-
-log "INFO: Deployment completed. Checking if restore is needed..."
-postgresql_version_after=$($SSH_SERVER "psql --version" | awk '{print $3}' || {
-  log "ERROR: Could not retrieve PostgreSQL version after deploy. Exiting."
-  exit 1
-})
-
-if [[ "$(echo -e "$postgresql_version_before\n$postgresql_version_after" | sort -V | head -n1)" == "$postgresql_version_before"  && "$postgresql_version_before" != "$postgresql_version_after" ]]; then
-  log "INFO: PostgreSQL version upgraded from $postgresql_version_before to $postgresql_version_after."
-  perform_migration
-else
-  log "INFO: PostgreSQL version remains unchanged or downgraded ($postgresql_version_before → $postgresql_version_after). No migration required."
 fi
+log "PostgreSQL server_version_num before deploy: ${before}"
+
+log "backing up on the remote"
+ssh "$REMOTE" "mkdir -p ${REMOTE_HOME}/backups && sudo -u postgres pg_dumpall > ${BACKUP}" || {
+  log "ERROR: remote backup failed; deployment cancelled"
+  exit 1
+}
+
+log "downloading the backup to ${LOCAL_COPY}"
+scp "${REMOTE}:${BACKUP}" "$LOCAL_COPY" || {
+  log "ERROR: backup download failed; deployment cancelled"
+  exit 1
+}
+
+log "deploying"
+deploy "${FLAKE}#${TARGET}" || {
+  log "ERROR: deployment failed; migration cancelled"
+  exit 1
+}
+
+after="$(server_major)"
+if ! [[ "$after" =~ ^[0-9]+$ ]]; then
+  log "ERROR: could not read the remote PostgreSQL version after deploy"
+  exit 1
+fi
+log "PostgreSQL server_version_num after deploy: ${after}"
+
+if [ "$after" -le "$before" ]; then
+  log "version unchanged or downgraded (${before} -> ${after}); no restore needed"
+  exit 0
+fi
+
+log "version upgraded (${before} -> ${after}); restoring into the fresh cluster"
+if ! ssh "$REMOTE" "test -s ${BACKUP}"; then
+  log "ERROR: no usable backup at ${BACKUP} on the remote; restore aborted"
+  exit 1
+fi
+ssh "$REMOTE" "sudo -u postgres psql -f ${BACKUP} postgres" || {
+  log "ERROR: remote restore failed"
+  exit 1
+}
+ssh "$REMOTE" "rm -f ${BACKUP}"
+log "restore complete; local copy kept at ${LOCAL_COPY}"
