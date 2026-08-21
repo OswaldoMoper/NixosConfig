@@ -63,6 +63,10 @@
     inherit nixosConfigurations;
     lib = myLib;
     deploy.nodes = myLib.mkDeployNodes nixosConfigurations;
+    apps.${system} = myLib.mkPreDeployApps {
+      inherit nixosConfigurations;
+      pkgs = nixpkgs.legacyPackages.${system};
+    };
     packages.${system} = let
       pkgs = nixpkgs.legacyPackages.${system};
       common = with pkgs; [ coreutils gnugrep gawk util-linux systemd ];
