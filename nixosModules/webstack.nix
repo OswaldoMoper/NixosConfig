@@ -24,6 +24,7 @@ let
     name = app.domain;
     value = {
       inherit enableACME;
+      inherit (app) default;
       forceSSL = enableACME;
       locations."/" = {
         proxyPass = "http://localhost:${toString app.port}";
@@ -118,6 +119,18 @@ let
           listener on the virtualHost the app's own module created, without
           taking over its locations. "managed" apps in nginx.apps already get
           this from webStack, so it is only meaningful for profiles.
+        '';
+      };
+      default = mkOption {
+        type = types.bool;
+        default = false;
+        description = ''
+          Make this app's virtualHost nginx's default_server.
+
+          Without one, nginx serves the first server block to a request whose
+          Host matches nothing, and the blocks come out in attribute order:
+          an unknown name, or a request to the bare IP, reaches whichever app
+          sorts first alphabetically rather than the site you meant.
         '';
       };
       database = mkOption {
@@ -248,6 +261,18 @@ in
                   ++ (lib.optional cfg.tunnel.ssh.enable cfg.tunnel.ssh.port);
               in builtins.length (lib.unique ports) == builtins.length ports;
             message = "webStack: Each service must have unique port";
+          }
+          {
+            assertion = builtins.length (lib.filter (a: a.default) allApps) <= 1;
+            message = "webStack: at most one app can set 'default = true'.";
+          }
+          {
+            assertion = lib.all (a: !a.default || a.kind == "managed") allApps;
+            message = ''
+              webStack: 'default = true' only reaches nginx on a kind = "managed"
+              app, because webStack does not build the virtualHost of a profile.
+              Set default_server in the app's own module instead.
+            '';
           }
           {
             assertion = 
