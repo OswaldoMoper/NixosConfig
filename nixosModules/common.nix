@@ -1,7 +1,7 @@
-{config, pkgs, inputs, ...}:
+{config, pkgs, lib, inputs, ...}:
 
 {
-  system.stateVersion = "26.05";
+  system.stateVersion = lib.mkDefault "26.05";
   environment.pathsToLink = [
     "/share/nix-direnv"
     "/share/zsh"
