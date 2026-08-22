@@ -101,6 +101,11 @@ in
     default = {};
   };
   config = {
+    assertions = lib.mapAttrsToList (name: cfg: {
+      assertion = (cfg.home.enable && cfg.home.msmtp.enable) -> cfg.home.msmtp.passwordFile != "";
+      message = "myUsers.${name}.home.msmtp is enabled but passwordFile is empty.";
+    }) config.myUsers;
+
     users.users = mapAttrs (name: cfg:
       mkIf cfg.enable (
         recursiveUpdate {
