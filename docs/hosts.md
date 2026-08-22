@@ -24,9 +24,9 @@ The flake automatically loads **every `.nix` file** inside `hosts/`:
 
 ```markdown
 hosts/
-├── spartanWSL.nix
-├── exampleServer.nix
-└── laptop.nix
+├── spartanWSL.nix      ← the only one in this repo today
+├── exampleServer.nix   ← illustrative
+└── laptop.nix          ← illustrative
 ```
 
 Each file becomes:
@@ -322,6 +322,7 @@ Servers typically enable:
     email = "omoper@example.com";
     home = {
       enable = true;
+      # Needs a committed hmProfiles/dev.nix, or evaluation fails.
       profiles = [ "dev" ];
       git.enable = true;
       msmtp = {

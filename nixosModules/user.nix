@@ -26,7 +26,15 @@ in
           profiles = mkOption {
             type = types.listOf types.str;
             default = [];
-            description = "Home Manager profiles to import";
+            example = [ "dev" ];
+            description = ''
+              Home Manager profiles to import, by basename, from hmProfiles/ at
+              the root of this flake.
+
+              Each entry must resolve to a committed file: an untracked one is
+              invisible to Nix once this flake is consumed by rev, so a missing
+              profile fails evaluation rather than being skipped.
+            '';
           };
           git = {
             enable = mkEnableOption "Enable Git configuration";
@@ -173,12 +181,15 @@ in
       };
       imports =
         let
-          base = ./hmProfiles;
-          existing = builtins.filter
-            (p: builtins.pathExists (base + "/${p}.nix"))
-            cfg.home.profiles;
+          base = ../hmProfiles;
+          missing = builtins.filter (p: !builtins.pathExists (base + "/${p}.nix")) cfg.home.profiles;
         in
-        map (p: base + "/${p}.nix") existing;
+        lib.throwIf (missing != [ ]) ''
+          myUsers.${name}.home.profiles: no hmProfiles/${
+            concatStringsSep ".nix, hmProfiles/" missing
+          }.nix in this flake. A file that exists but is untracked counts as
+          missing, because Nix does not see it once the flake is used by rev.
+        '' (map (p: base + "/${p}.nix") cfg.home.profiles);
     }) config.myUsers;
   };
 }

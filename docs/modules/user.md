@@ -66,29 +66,35 @@ When `home.enable = true`, the module:
 - creates a Home Manager user
 - sets `home.stateVersion = "26.05"`
 - enables `ssh-agent` if SSH keys are configured
-- imports profiles from `hmProfiles`/
+- imports the profiles listed in `home.profiles`
 
 ## Home Manager Profiles
 
-Profiles must be stored in:
+Profiles live at the root of the flake, one file per profile:
 
 ```Markdown
 hmProfiles/<profile>.nix
 ```
 
-Users may declare:
+Each is an ordinary Home Manager module:
 
 ```Nix
-home.profiles = [ "dev" "motorsport" ];
+{ pkgs, ... }:
+{
+  home.packages = [ pkgs.ripgrep ];
+}
 ```
 
-The module:
+Users declare the ones they want by basename:
 
-- checks if each profile exists
-- imports only existing profiles
-- ignores missing ones silently
+```Nix
+home.profiles = [ "dev" ];
+```
 
-This allows flexible per-user customization.
+A profile that does not resolve **fails evaluation**, naming the file it looked
+for. That includes a file that exists on disk but is untracked by git: Nix does
+not see it once this flake is consumed by rev, so it would silently do nothing
+on the machine that matters.
 
 ## Git Configuration
 
@@ -189,8 +195,6 @@ Loads:
 
     home = {
       enable = true;
-      profiles = [ "dev" ];
-
       git = {
         enable = true;
         tag = "Oswaldo Moper";
