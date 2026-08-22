@@ -26,9 +26,17 @@ in
         default = "postgres";
       };
       passwordFile = mkOption {
-        type = types.nullOr types.path;
+        type = types.nullOr types.str;
         default = null;
-        description = "Path to a file containing the password for the initial role";
+        example = "/run/agenix/myapp-db-password";
+        description = ''
+          Path on the target host to a file holding the role's password. A string
+          rather than a path, so a path literal cannot copy the secret into the
+          world-readable nix store.
+
+          postgresql-setup runs as the postgres user, so the file has to be
+          readable by it: an agenix secret needs owner = "postgres".
+        '';
       };
       database = mkOption {
         type = types.str;
@@ -87,35 +95,33 @@ in
       '';
       settings.log_statement = cfg.logStatements;
 
+      ensureDatabases = lib.optional cfg.initialSetup.enable cfg.initialSetup.database;
+      ensureUsers = lib.optional cfg.initialSetup.enable { name = cfg.initialSetup.role; };
+
       initialScript =
-        if cfg.initialSetup.enable then
-          pkgs.writeText "init.sql" ''
-            DO $$
-            BEGIN
-              IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${cfg.initialSetup.role}') THEN
-                CREATE ROLE ${cfg.initialSetup.role} LOGIN;
-              END IF;
-            END
-            $$;
-
-            \password ${cfg.initialSetup.role} < ${cfg.initialSetup.passwordFile};
-
-            CREATE DATABASE ${cfg.initialSetup.database} OWNER ${cfg.initialSetup.role};
-
-            DO $$
-            BEGIN
-              IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${cfg.initialSetup.role}') THEN
-                GRANT ALL PRIVILEGES ON DATABASE ${cfg.initialSetup.database} TO ${cfg.initialSetup.role};
-              END IF;
-            END
-            $$;
-          ''
-        else if cfg.dumpFile != null then
+        if cfg.dumpFile != null then
           pkgs.writeText "restore.sql" ''
             \i ${cfg.dumpFile}
           ''
         else
           null;
     };
+
+    systemd.services.postgresql-setup.postStart = mkIf cfg.initialSetup.enable (
+      lib.mkAfter ''
+        # An unreadable or empty file must stop the unit: psql treats an empty
+        # password as "clear it", so without this the role silently loses its
+        # password and every client that authenticates starts failing.
+        if ! pw="$(${pkgs.coreutils}/bin/cat ${cfg.initialSetup.passwordFile})" || [ -z "$pw" ]; then
+          echo "postgresql: ${cfg.initialSetup.passwordFile} is unreadable or empty" >&2
+          echo "postgresql-setup runs as postgres, so the file must be readable by it" >&2
+          exit 1
+        fi
+        ${cfg.package}/bin/psql -v ON_ERROR_STOP=1 -d postgres -v pw="$pw" <<'SQL'
+        ALTER USER ${cfg.initialSetup.role} WITH PASSWORD :'pw';
+        ALTER DATABASE ${cfg.initialSetup.database} OWNER TO ${cfg.initialSetup.role};
+        SQL
+      ''
+    );
   };
 }
