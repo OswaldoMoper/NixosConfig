@@ -26,7 +26,7 @@ This repository defines a universal architecture for multiple NixOS systems mana
 
 - **Multihost:** each file on `hosts/` represents a different machine
 - **Multiuser**: `myUsers` module with Home Manager automatic integration
-- **Home Manager Profiles**: configurations per user on `hmProfiles/`
+- **Home Manager Profiles**: reusable per-user configs in `hmProfiles/`
 - **Reusable Modules**: PostgreSQL, web stack, graphical environment, WSL, etc
 - **One Branch**: all the hosts are built from the same base
 
@@ -100,28 +100,28 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
 
 ``` markdown
 ├── flake.nix
-├── scripts/
-│   ├── deploy-migration.sh
-│   └── nixos-rebuild-migration.sh
+├── flake.lock
+├── lib/
+│   └── default.nix                  ← mkDeployNodes, mkPreDeployApps
 ├── hosts/
 │   ├── hardware/
-│   │   ├── WSL.nix
-│   │   ├── server.nix    ← Not included
-│   │   └── laptop.nix    ← Not included
-│   ├── exampleServer.nix
-│   ├── spartanWSL.nix
-│   └── laptop.nix        ← Not included
+│   │   └── WSL.nix
+│   └── spartanWSL.nix
+├── hmProfiles/                      ← per-user profiles (none committed yet)
 ├── nixosModules/
 │   ├── common.nix
 │   ├── deployment.nix
 │   ├── graphical.nix
 │   ├── postgresql.nix
-│   ├── user.nix        ← multiuser module
+│   ├── user.nix                     ← multiuser module
 │   └── webstack.nix
-└── hmProfiles/
-    ├── dev.nix         ← Not included yet
-    ├── motorsport.nix  ← Not included yet
-    └── default.nix     ← Not included yet
+├── scripts/
+│   ├── deploy-gate.sh               ← the 5-step deploy gate
+│   ├── deploy-migration.sh
+│   ├── live-checks.sh               ← pre-deploy and verify, over ssh
+│   └── nixos-rebuild-migration.sh
+└── secrets/
+    └── secrets.nix                  ← agenix recipients
 ```
 
 ## 👤 Declaring users
@@ -304,14 +304,12 @@ Inside the host file:
 
 ### 2. Running a deployment
 
-```Bash
-nix run .#deploy -- --hostname myServer
-```
-
-or
+The nodes live in the flake that declares the hosts, not here: this repo exports
+`lib.mkDeployNodes`, which flattens each host's `deployment.<node>` into the
+`deploy.nodes` that `deploy-rs` expects. Run it from that flake:
 
 ```bash
-deploy -- --hostname myServer
+deploy .#myNode
 ```
 
 This will:
@@ -319,6 +317,14 @@ This will:
 - build the system
 - upload the closure
 - activate the new configuration
+
+`lib.mkPreDeployApps` adds a gated alternative to the same flake, which is the
+one to prefer: it runs the pure checks, measures the live host, builds the
+toplevel locally, deploys, and then verifies the result.
+
+```bash
+nix run .#deploy-myNode
+```
 
 ## 🐘 PostgreSQL migration (deploy-migration)
 
