@@ -59,15 +59,7 @@
         name = builtins.replaceStrings [".nix"] [""] file;
         value = mkHost (builtins.replaceStrings [".nix"] [""] file);
       }) hostFiles);
-  in {
-    inherit nixosConfigurations;
-    lib = myLib;
-    deploy.nodes = myLib.mkDeployNodes nixosConfigurations;
-    apps.${system} = myLib.mkPreDeployApps {
-      inherit nixosConfigurations;
-      pkgs = nixpkgs.legacyPackages.${system};
-    };
-    packages.${system} = let
+    myPackages = let
       pkgs = nixpkgs.legacyPackages.${system};
       common = with pkgs; [ coreutils gnugrep gawk util-linux systemd ];
     in {
@@ -86,6 +78,24 @@
         ];
         text = builtins.readFile ./scripts/deploy-migration.sh;
       };
+    };
+  in {
+    inherit nixosConfigurations;
+    lib = myLib;
+    deploy.nodes = myLib.mkDeployNodes nixosConfigurations;
+    apps.${system} = myLib.mkPreDeployApps {
+      inherit nixosConfigurations;
+      pkgs = nixpkgs.legacyPackages.${system};
+    };
+    packages.${system} = myPackages;
+    checks.${system} = myPackages // {
+      scripts =
+        (nixpkgs.legacyPackages.${system}).runCommand "shellcheck-scripts"
+          { nativeBuildInputs = [ (nixpkgs.legacyPackages.${system}).shellcheck ]; }
+          ''
+            shellcheck -s bash -e SC2029 ${./scripts}/*.sh
+            touch "$out"
+          '';
     };
     nixosModules = let
         moduleDir = ./nixosModules;
