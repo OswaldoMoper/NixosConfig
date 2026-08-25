@@ -109,6 +109,8 @@
                 export GATE_FLAKE="''${GATE_FLAKE:-.}"
                 export GATE_NODE=${lib.escapeShellArg nodeName}
                 export GATE_HOST=${lib.escapeShellArg hostName}
+                export GATE_HOST_ADDR=${lib.escapeShellArg node.hostname}
+                export GATE_HOST_USER="''${GATE_SSH_USER:-${sshUserOf node}}"
                 export GATE_CACHES=${lib.getExe (cacheGuard nodeName)}
                 export GATE_PRE_DEPLOY=${lib.getExe (liveCheck nodeName node "pre-deploy")}
                 export GATE_ACCESS=${lib.getExe (accessGuard nodeName node)}
