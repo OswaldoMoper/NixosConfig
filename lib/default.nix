@@ -55,6 +55,22 @@
               '';
             };
 
+          accessGuard =
+            nodeName: node:
+            pkgs.writeShellApplication {
+              name = "pre-deploy-${nodeName}-access";
+              runtimeInputs = with pkgs; [ coreutils openssh ];
+              excludeShellChecks = [ "SC2029" ];
+              text = ''
+                : "''${ACCESS_HOST:=${node.hostname}}"
+                : "''${ACCESS_SSH_USER:=${sshUserOf node}}"
+                export ACCESS_HOST ACCESS_SSH_USER
+                export ACCESS_NODE=${lib.escapeShellArg nodeName}
+
+                ${builtins.readFile ../scripts/access-guard.sh}
+              '';
+            };
+
           gate =
             nodeName: node:
             pkgs.writeShellApplication {
@@ -70,6 +86,7 @@
                 export GATE_NODE=${lib.escapeShellArg nodeName}
                 export GATE_HOST=${lib.escapeShellArg hostName}
                 export GATE_PRE_DEPLOY=${lib.getExe (liveCheck nodeName node "pre-deploy")}
+                export GATE_ACCESS=${lib.getExe (accessGuard nodeName node)}
                 export GATE_VERIFY=${lib.getExe (liveCheck nodeName node "verify")}
 
                 ${builtins.readFile ../scripts/deploy-gate.sh}
@@ -97,6 +114,17 @@
             )
           ) nodes;
 
+          accessApps = lib.mapAttrs' (
+            nodeName: node:
+            let
+              pkg = accessGuard nodeName node;
+            in
+            lib.nameValuePair pkg.name {
+              type = "app";
+              program = lib.getExe pkg;
+            }
+          ) nodes;
+
           gateApps = lib.mapAttrs' (
             nodeName: node:
             lib.nameValuePair "deploy-${nodeName}" {
@@ -105,7 +133,7 @@
             }
           ) nodes;
         in
-        checkApps // lib.optionalAttrs (deployPkg != null) gateApps;
+        checkApps // accessApps // lib.optionalAttrs (deployPkg != null) gateApps;
     in
     lib.foldl' (acc: h: acc // forHost h nixosConfigurations.${h}) { } (
       lib.attrNames nixosConfigurations
