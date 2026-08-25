@@ -71,6 +71,30 @@
               '';
             };
 
+          cacheGuard =
+            nodeName:
+            pkgs.writeShellApplication {
+              name = "pre-deploy-${nodeName}-caches";
+              runtimeInputs = with pkgs; [
+                coreutils
+                gawk
+                gnugrep
+                nix
+              ];
+              text = ''
+                export CACHE_SUBSTITUTERS=${
+                  lib.escapeShellArg (lib.concatStringsSep " " (cfg.nix.settings.extra-substituters or [ ]))
+                }
+                export CACHE_KEYS=${
+                  lib.escapeShellArg (
+                    lib.concatStringsSep " " (cfg.nix.settings.extra-trusted-public-keys or [ ])
+                  )
+                }
+
+                ${builtins.readFile ../scripts/cache-guard.sh}
+              '';
+            };
+
           gate =
             nodeName: node:
             pkgs.writeShellApplication {
@@ -85,6 +109,7 @@
                 export GATE_FLAKE="''${GATE_FLAKE:-.}"
                 export GATE_NODE=${lib.escapeShellArg nodeName}
                 export GATE_HOST=${lib.escapeShellArg hostName}
+                export GATE_CACHES=${lib.getExe (cacheGuard nodeName)}
                 export GATE_PRE_DEPLOY=${lib.getExe (liveCheck nodeName node "pre-deploy")}
                 export GATE_ACCESS=${lib.getExe (accessGuard nodeName node)}
                 export GATE_VERIFY=${lib.getExe (liveCheck nodeName node "verify")}
@@ -125,6 +150,17 @@
             }
           ) nodes;
 
+          cacheApps = lib.mapAttrs' (
+            nodeName: _:
+            let
+              pkg = cacheGuard nodeName;
+            in
+            lib.nameValuePair pkg.name {
+              type = "app";
+              program = lib.getExe pkg;
+            }
+          ) nodes;
+
           gateApps = lib.mapAttrs' (
             nodeName: node:
             lib.nameValuePair "deploy-${nodeName}" {
@@ -133,7 +169,7 @@
             }
           ) nodes;
         in
-        checkApps // accessApps // lib.optionalAttrs (deployPkg != null) gateApps;
+        checkApps // accessApps // cacheApps // lib.optionalAttrs (deployPkg != null) gateApps;
     in
     lib.foldl' (acc: h: acc // forHost h nixosConfigurations.${h}) { } (
       lib.attrNames nixosConfigurations
