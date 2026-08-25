@@ -2,6 +2,15 @@ step() { printf '\n=== %s\n' "$1"; }
 
 printf 'deploy gate for %s (flake %s)\n' "$GATE_NODE" "$GATE_FLAKE"
 
+# The node's declared sshUser is root or admin, and neither belongs to whoever
+# is deploying today. One name has to reach the guards and deploy alike, or the
+# live preconditions fail as themselves before the deploy is even attempted.
+if [ -n "${GATE_SSH_USER:-}" ]; then
+  export LIVE_SSH_USER="$GATE_SSH_USER"
+  export ACCESS_SSH_USER="$GATE_SSH_USER"
+  set -- --ssh-user "$GATE_SSH_USER" "$@"
+fi
+
 step "1/7 binary caches on this machine"
 # Only a human answering "abort" makes this stop.
 "$GATE_CACHES" || {
@@ -46,7 +55,7 @@ step "5/7 ssh access this deploy would remove"
 "$GATE_ACCESS" "$built" || true
 
 step "6/7 deploy"
-deploy "${GATE_FLAKE}#${GATE_NODE}" || {
+deploy "${GATE_FLAKE}#${GATE_NODE}" "$@" || {
   printf 'deploy failed; run the verify app to see what state the host is in\n' >&2
   exit 1
 }
