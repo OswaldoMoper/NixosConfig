@@ -26,7 +26,10 @@
           cfg = hostConfig.config;
           nodes = if cfg ? deployment then cfg.deployment else { };
           apps = if cfg ? webStack then cfg.webStack.tunnel.apps ++ cfg.webStack.nginx.apps else [ ];
-          units = map (a: a.name) (lib.filter (a: a.kind == "managed") apps);
+          hmUsers = if cfg ? myUsers then lib.filter (n: cfg.myUsers.${n}.home.enable) (lib.attrNames cfg.myUsers) else [ ];
+          units =
+            map (a: a.name) (lib.filter (a: a.kind == "managed") apps)
+            ++ map (u: "home-manager-${u}") hmUsers;
           databases = map (a: a.database.name) (lib.filter (a: a.database != null) apps);
           pg = cfg.services.postgresql;
 
