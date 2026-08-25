@@ -132,6 +132,8 @@ in
       } cfg.native
       )
     ) config.myUsers;
+    environment.systemPackages = with pkgs; [ direnv any-nix-shell ];
+
     programs = {
       nix-index.enableZshIntegration = true;
       zsh = {
