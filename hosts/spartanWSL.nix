@@ -152,6 +152,8 @@ in
       self.packages.${pkgs.stdenv.hostPlatform.system}.deploy-migration
     ];
   };
+  tmux.accent = "#7fff00";
+
   # General Nix config
   nix = lib.mkMerge [
     {

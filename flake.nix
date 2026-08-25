@@ -37,6 +37,7 @@
         (import ./nixosModules/graphical.nix)
         (import ./nixosModules/webstack.nix)
         (import ./nixosModules/postgresql.nix)
+        (import ./nixosModules/tmux.nix)
         (import ./nixosModules/user.nix)
         (import ./nixosModules/deployment.nix)
       ];
