@@ -4,6 +4,19 @@ let
   inherit (lib) mkIf mkOption mkEnableOption types mapAttrs optionalString concatStringsSep recursiveUpdate;
 in
 {
+  options.hmProfiles.dirs = mkOption {
+    type = types.listOf types.path;
+    default = [ ];
+    description = ''
+      Directories searched for the profiles named by
+      myUsers.<name>.home.profiles, in order; the first match wins.
+
+      A consuming repo adds its own so that profiles belonging to it do not have
+      to live in this library, where using one would cost a push and an input
+      bump before it could be referenced at all.
+    '';
+  };
+
   options.myUsers = mkOption {
     type = types.attrsOf (types.submodule({ name, ...}: {
       options = {
@@ -101,6 +114,10 @@ in
     default = {};
   };
   config = {
+    # This library's own, searched last so a consumer's profile of the same name
+    # wins. Guarded because the directory need not exist.
+    hmProfiles.dirs = lib.mkAfter (lib.optional (builtins.pathExists ../hmProfiles) ../hmProfiles);
+
     assertions = lib.mapAttrsToList (name: cfg: {
       assertion = (cfg.home.enable && cfg.home.msmtp.enable) -> cfg.home.msmtp.passwordFile != "";
       message = "myUsers.${name}.home.msmtp is enabled but passwordFile is empty.";
@@ -186,15 +203,19 @@ in
       };
       imports =
         let
-          base = ../hmProfiles;
-          missing = builtins.filter (p: !builtins.pathExists (base + "/${p}.nix")) cfg.home.profiles;
+          dirs = config.hmProfiles.dirs;
+          find = p: lib.findFirst (d: builtins.pathExists (d + "/${p}.nix")) null dirs;
+          resolved = map (p: { name = p; dir = find p; }) cfg.home.profiles;
+          missing = map (r: r.name) (builtins.filter (r: r.dir == null) resolved);
         in
         lib.throwIf (missing != [ ]) ''
-          myUsers.${name}.home.profiles: no hmProfiles/${
-            concatStringsSep ".nix, hmProfiles/" missing
-          }.nix in this flake. A file that exists but is untracked counts as
-          missing, because Nix does not see it once the flake is used by rev.
-        '' (map (p: base + "/${p}.nix") cfg.home.profiles);
+          myUsers.${name}.home.profiles: no ${
+            concatStringsSep ".nix, " missing
+          }.nix in any of: ${concatStringsSep " " (map toString dirs)}
+
+          A file that exists but is untracked counts as missing, because Nix does
+          not see it once the flake is used by rev.
+        '' (map (r: r.dir + "/${r.name}.nix") (builtins.filter (r: r.dir != null) resolved));
     }) config.myUsers;
   };
 }
