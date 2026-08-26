@@ -88,6 +88,23 @@ if [ "$mode" = "verify" ]; then
       bad "database ${db} exists but public is empty"
     fi
   done
+
+  pairs=()
+  if [ -n "${LIVE_DB_OWNERS:-}" ]; then read -ra pairs <<<"$LIVE_DB_OWNERS"; fi
+  for pair in ${pairs[@]+"${pairs[@]}"}; do
+    db="${pair%%=*}"
+    role="${pair#*=}"
+    if [ "$(psql_value "\"SELECT 1 FROM pg_roles WHERE rolname='${role}'\"")" != "1" ]; then
+      bad "role ${role} does not exist, so ${db} has nobody to connect as"
+      continue
+    fi
+    owner="$(psql_value "\"SELECT pg_get_userbyid(datdba) FROM pg_database WHERE datname='${db}'\"")"
+    if [ "$owner" = "$role" ]; then
+      ok "role ${role} exists and owns ${db}"
+    else
+      bad "database ${db} is owned by ${owner:-nobody}, expected ${role}"
+    fi
+  done
 fi
 
 if [ "$fail" -ne 0 ]; then
