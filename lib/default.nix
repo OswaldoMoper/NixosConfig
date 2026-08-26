@@ -30,7 +30,12 @@
           units =
             map (a: a.name) (lib.filter (a: a.kind == "managed") apps)
             ++ map (u: "home-manager-${u}") hmUsers;
-          databases = map (a: a.database.name) (lib.filter (a: a.database != null) apps);
+          ensure = lib.optionals (cfg ? postgresql && cfg.postgresql.enable) cfg.postgresql.ensure;
+          databases = lib.unique (
+            map (a: a.database.name) (lib.filter (a: a.database != null) apps)
+            ++ lib.optionals pg.enable pg.ensureDatabases
+          );
+          owners = map (e: "${e.database}=${e.role}") (lib.filter (e: e.owner) ensure);
           pg = cfg.services.postgresql;
 
           liveCheck =
@@ -53,6 +58,7 @@
                 export LIVE_DATA_DIR=${lib.escapeShellArg pg.dataDir}
                 export LIVE_UNITS=${lib.escapeShellArg (lib.concatStringsSep " " units)}
                 export LIVE_DATABASES=${lib.escapeShellArg (lib.concatStringsSep " " databases)}
+                export LIVE_DB_OWNERS=${lib.escapeShellArg (lib.concatStringsSep " " owners)}
 
                 ${builtins.readFile ../scripts/live-checks.sh}
               '';

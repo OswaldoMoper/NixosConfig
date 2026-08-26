@@ -224,11 +224,20 @@ in
     };
 
     config = mkIf cfg.enable {
+      postgresql.ensure = map (a: {
+        database = a.database.name;
+        role = a.database.user;
+      }) (lib.filter (a: a.database != null) (cfg.tunnel.apps ++ cfg.nginx.apps));
+
       assertions = let allApps = cfg.tunnel.apps ++ cfg.nginx.apps;
         in [
           {
             assertion = cfg.email != "";
             message = "webStack requires a valid email";
+          }
+          {
+            assertion = lib.any (a: a.database != null) allApps -> config.postgresql.enable;
+            message = "webStack: an app declares a database but postgresql.enable is false, so nothing would create it.";
           }
           {
             assertion = lib.all (app: app.kind != "managed" || app.package != null) allApps;
