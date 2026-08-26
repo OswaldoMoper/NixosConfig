@@ -108,6 +108,19 @@ let
       workDir = mkOption {
         type = types.str;
         default = "";
+        example = "/home/myapp/myapp";
+        description = ''
+          WorkingDirectory for the unit. Empty leaves it unset, so the app
+          starts in `/`.
+
+          That matters more than it looks: an app that opens a path relative to
+          its own directory resolves it against `/`, where the manager account
+          cannot write, and the unit dies with no obvious cause. If the app
+          reads or writes anything by a relative path, set this.
+
+          systemd fails a unit whose WorkingDirectory does not exist, so a host
+          that sets this usually wants a tmpfiles rule beside it.
+        '';
       };
       tls = mkOption {
         type = types.bool;
