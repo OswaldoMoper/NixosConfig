@@ -8,6 +8,10 @@ bad() {
   printf '  FAIL  %s\n' "$1" >&2
   fail=1
 }
+# Says something is wrong without stopping the deploy. For things that are real
+# but that a deploy cannot fix and a human has to schedule -- blocking every
+# future deploy on one of those helps nobody.
+warn() { printf '  WARN  %s\n' "$1" >&2; }
 
 # Client-side expansion of the remote command is the point here, so SC2029 is
 # excluded where this script is packaged.
@@ -86,6 +90,18 @@ if [ "$mode" = "verify" ]; then
       ok "database ${db} has ${tables} tables in public"
     else
       bad "database ${db} exists but public is empty"
+    fi
+
+    # A nixpkgs bump moves glibc, and with it the collation rules. Text indexes
+    # built under the old rules can then miss rows that are really there --
+    # wrong answers, quietly, with every unit still green. Found on server
+    # after the 25.11 -> 26.05 jump, and only on data that predates it, which is
+    # why a VM rehearsal cannot catch it.
+    built="$(psql_value "\"SELECT datcollversion FROM pg_database WHERE datname='${db}'\"")"
+    now="$(psql_value "\"SELECT pg_database_collation_actual_version(oid) FROM pg_database WHERE datname='${db}'\"")"
+    if [ -n "$built" ] && [ -n "$now" ] && [ "$built" != "$now" ]; then
+      warn "database ${db} was built with collation ${built} and the OS now provides ${now}: text indexes may miss rows"
+      warn "  fix, in a quiet window: REINDEX DATABASE CONCURRENTLY ${db}; then ALTER DATABASE ${db} REFRESH COLLATION VERSION"
     fi
   done
 
