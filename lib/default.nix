@@ -47,8 +47,13 @@
               text = ''
                 # Host and user stay overridable so the checks can be pointed at
                 # a staging box, or at localhost to exercise the script itself.
+                #
+                # GATE_SSH_USER is honoured too: it is the name the README gives
+                # for "deploy as yourself", and running a check on its own with
+                # only that set used to fall back to the node's declared user and
+                # fail as root, which reads as a dead host.
                 : "''${LIVE_HOST:=${node.hostname}}"
-                : "''${LIVE_SSH_USER:=${sshUserOf node}}"
+                : "''${LIVE_SSH_USER:=''${GATE_SSH_USER:-${sshUserOf node}}}"
                 export LIVE_HOST LIVE_SSH_USER
                 export LIVE_MODE=${lib.escapeShellArg mode}
                 export LIVE_NODE=${lib.escapeShellArg nodeName}
@@ -72,7 +77,7 @@
               excludeShellChecks = [ "SC2029" ];
               text = ''
                 : "''${ACCESS_HOST:=${node.hostname}}"
-                : "''${ACCESS_SSH_USER:=${sshUserOf node}}"
+                : "''${ACCESS_SSH_USER:=''${GATE_SSH_USER:-${sshUserOf node}}}"
                 export ACCESS_HOST ACCESS_SSH_USER
                 export ACCESS_NODE=${lib.escapeShellArg nodeName}
 
