@@ -203,12 +203,12 @@ unnoticed until deployment. With one, it fails during evaluation.
 {
   webStack.nginx.apps = [
     { name = "blog"; domain = "example.com"; port = 2001; package = inputs.blog; }
-    { kind = "profile"; name = "xpsoasis"; domain = "xpsoasis.org"; port = 3003; }
+    { kind = "profile"; name = "example2"; domain = "example2.org"; port = 3003; }
   ];
-  services.xpsoasis.profile = {
+  services.example2.profile = {
     enable = true;
     mode = "production";
-    serverName = "xpsoasis.org";
+    serverName = "example2.org";
     ports.backend = 3003;
   };
 }
