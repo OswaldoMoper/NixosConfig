@@ -195,11 +195,15 @@ in
         settings = cfg.home.sshHosts // {
           "*" = {
             AddKeysToAgent = "yes";
-            identityFile = [
-              "~/.ssh/${cfg.home.sshKeys.baseName.name}_ed25519"
-              "~/.ssh/${cfg.home.sshKeys.baseName.name}"
-              "~/.ssh/${cfg.home.sshKeys.baseName.name}_rsa"
-            ] ++ (map (key: "~/.ssh/${key}") cfg.home.sshKeys.names);
+            identityFile =
+              lib.optionals
+                (cfg.home.sshKeys.baseName.enable && cfg.home.sshKeys.baseName.name != "")
+                [
+                  "~/.ssh/${cfg.home.sshKeys.baseName.name}_ed25519"
+                  "~/.ssh/${cfg.home.sshKeys.baseName.name}"
+                  "~/.ssh/${cfg.home.sshKeys.baseName.name}_rsa"
+                ]
+              ++ map (key: "~/.ssh/${key}") cfg.home.sshKeys.names;
           };
         };
       };

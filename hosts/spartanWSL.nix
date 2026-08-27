@@ -60,10 +60,7 @@ in
           };
           sshKeys = {
             enable = true;
-            names = [
-              "id_ed25519"
-              "id_25519"
-            ];
+            names = [ "id_ed25519" ];
           };
         };
         native.openssh.authorizedKeys.keys = [
