@@ -50,9 +50,43 @@ fi
 
 # On the very first deploy of a fresh machine the host is not up yet, so this
 # leg fails; deploy that once directly and the guard applies from then on.
-if ! live_keys="$(printf '%s' "$lister" | ssh -o BatchMode=yes -o ConnectTimeout=10 "$remote" "sh -s -- /etc" 2>/dev/null)"; then
-  echo "access-guard: cannot reach $remote, skipping the comparison" >&2
-  exit 0
+#
+# That exemption is for a machine that is not there. Failing to authenticate is
+# a different thing -- the machine is there and we simply cannot look -- and
+# skipping on it quietly retires the check. BatchMode makes it easy to hit: a
+# passphrase-locked key with no agent loaded fails here while working fine
+# interactively.
+#
+# Hence two failure kinds, not one. "Access would be removed" warns and never
+# blocks, which is this script's whole stance. "I never looked" exits 2, because
+# a check that silently does not run is worse than one that fails.
+if ! probe_err="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "$remote" true 2>&1 >/dev/null)"; then
+  case "$probe_err" in
+    *"Permission denied"* | *"No supported authentication"*)
+      echo "access-guard: reached $remote, but could not authenticate without a prompt." >&2
+      echo "BatchMode is on here, so a passphrase-locked key needs an agent:" >&2
+      # shellcheck disable=SC2016  # the $( ) is text being shown, not run
+      echo '  eval "$(ssh-agent -s)" && ssh-add' >&2
+      echo "The access check did NOT run. Exit 2 says so, which the gate honours;" >&2
+      echo "a finding still only warns, but never looking is not a finding." >&2
+      exit 2
+      ;;
+    *)
+      echo "access-guard: cannot reach $remote, skipping the comparison" >&2
+      exit 0
+      ;;
+  esac
+fi
+
+live_keys="$(printf '%s' "$lister" | ssh -o BatchMode=yes -o ConnectTimeout=10 "$remote" "sh -s -- /etc" 2>/dev/null || true)"
+if [ -z "$live_keys" ]; then
+  # The comparison only ever reports what the live side has and the closure
+  # lacks, so an empty live side passes everything -- silently, and in the one
+  # direction that matters. A reachable host with no authorized keys at all is
+  # not a real state; something went wrong reading them.
+  echo "access-guard: $remote answered, then listed no authorized keys at all." >&2
+  echo "An empty live list would make every removal invisible, so this is not a pass." >&2
+  exit 2
 fi
 
 # Compared on (principal, keytype+base64) pairs, so the key COMMENT is dropped:

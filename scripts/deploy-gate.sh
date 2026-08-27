@@ -50,9 +50,17 @@ built="$(nix build --no-link --print-out-paths \
 }
 
 step "5/7 ssh access this deploy would remove"
-# Warns, never blocks: a deliberate revocation should not need a flag, and this
-# must never be the reason an urgent deploy cannot go out.
-"$GATE_ACCESS" "$built" || true
+# A finding warns and never blocks: a deliberate revocation should not need a
+# flag, and this must never be the reason an urgent deploy cannot go out.
+#
+# Exit 2 is not a finding, it means the guard never looked -- and a check that
+# silently does not run is the thing it exists to prevent.
+access_rc=0
+"$GATE_ACCESS" "$built" || access_rc=$?
+if [ "$access_rc" -eq 2 ]; then
+  printf '\nnothing was deployed\n' >&2
+  exit 1
+fi
 
 step "6/7 deploy"
 # The exit code is recorded, not obeyed. Measured on 2026-08-25: a per-user
