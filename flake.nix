@@ -40,6 +40,7 @@
         (import ./nixosModules/tmux.nix)
         (import ./nixosModules/user.nix)
         (import ./nixosModules/deployment.nix)
+        (import ./nixosModules/vscode.nix)
       ];
     hostDir = ./hosts;
     hostFiles = builtins.filter
@@ -100,7 +101,9 @@
     };
     nixosModules = let
         moduleDir = ./nixosModules;
-        moduleFiles = builtins.attrNames (builtins.readDir moduleDir);
+        moduleFiles = builtins.filter
+          (name: builtins.match ".*\\.nix$" name != null)
+          (builtins.attrNames (builtins.readDir moduleDir));
       in builtins.listToAttrs (map (file: {
         name = builtins.replaceStrings [".nix"] [""] file;
         value = import (moduleDir + "/${file}");
