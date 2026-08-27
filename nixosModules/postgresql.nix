@@ -117,9 +117,9 @@ in
     };
 
     dumpFile = mkOption {
-      type = types.nullOr types.path;
+      type = types.nullOr types.str;
       default = null;
-      description = "SQL dump to restore if initialSetup is disabled";
+      description = "Path on the target machine to an SQL dump to restore if initialSetup is disabled";
     };
 
     tcp.enable = mkOption {
