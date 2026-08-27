@@ -24,11 +24,25 @@ psql_value() {
 printf '%s checks: %s (%s)\n' "$mode" "$node" "$remote"
 
 # BatchMode keeps a missing key from turning this into a password prompt that
-# hangs a pipeline. fail2ban answers a ban with reject, so a ban and a dead host
-# look identical from here.
-if ! sshq true 2>/dev/null; then
-  printf 'cannot reach %s over ssh (BatchMode, 10s timeout)\n' "$remote" >&2
-  printf 'a ban and a dead host look the same here: check from another address\n' >&2
+# hangs a pipeline. It also means a passphrase-locked key with no agent loaded
+# fails here while working perfectly interactively -- which looks nothing like
+# the problem it is, so name that case rather than blaming the network.
+#
+# fail2ban answers a ban with reject, so a ban and a dead host do look identical
+# from here. An authentication failure does not.
+if ! ssh_err="$(sshq true 2>&1 >/dev/null)"; then
+  case "$ssh_err" in
+    *"Permission denied"* | *"No supported authentication"*)
+      printf 'reached %s, but could not authenticate without a prompt\n' "$remote" >&2
+      printf 'BatchMode is on here, so a passphrase-locked key needs an agent:\n' >&2
+      # shellcheck disable=SC2016  # the $( ) is text being shown, not run
+      printf '  eval "$(ssh-agent -s)" && ssh-add\n' >&2
+      ;;
+    *)
+      printf 'cannot reach %s over ssh (BatchMode, 10s timeout)\n' "$remote" >&2
+      printf 'a ban and a dead host look the same here: check from another address\n' >&2
+      ;;
+  esac
   exit 1
 fi
 ok "ssh reachable"
