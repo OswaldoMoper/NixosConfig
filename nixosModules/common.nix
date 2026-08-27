@@ -9,10 +9,7 @@
   fonts.packages = with pkgs; [
     hack-font
   ];
-  services = {
-    openssh.enable = true;
-    sshd.enable = true;
-  };
+  services.openssh.enable = true;
   nix = {
     settings = {
       allow-import-from-derivation = true;
