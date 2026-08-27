@@ -135,7 +135,6 @@ in
     environment.systemPackages = with pkgs; [ direnv any-nix-shell ];
 
     programs = {
-      nix-index.enableZshIntegration = true;
       zsh = {
         enable = true;
         enableCompletion = true;
@@ -147,14 +146,8 @@ in
         shellInit = ''
           if [[ -o interactive ]]; then
             echo "welcome to NixOS, $USER"
-          
-            if [ ! ~/.zshrc ]; then
-              echo "creating ~/.zshrc"
-              touch ~/.zshrc
-            fi
+            eval "$(direnv hook zsh)"
           fi
-
-          eval "$(direnv hook zsh)"
         '';
         promptInit = ''
           any-nix-shell zsh --info-right | source /dev/stdin

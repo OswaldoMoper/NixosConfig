@@ -49,7 +49,7 @@ in
           enable = isGraphical;
           wayland.enable = isGraphical;
         };
-        defaultSession = "plasma";
+        defaultSession = mkIf isGraphical "plasma";
       };
       desktopManager.plasma6.enable = isGraphical;
     };
