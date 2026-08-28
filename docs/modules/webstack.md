@@ -179,6 +179,20 @@ Each app in `nginx.apps` or `tunnel.apps` has:
 }
 ```
 
+### `webStack.nginx.redirects`
+
+Domains that only send visitors somewhere else, as `domain -> target`:
+
+```Nix
+webStack.nginx.redirects = {
+  "old.example.com" = "https://new.example.com";
+};
+```
+
+Each one becomes a virtualHost with ACME and TLS that returns a 301 — a redirect still needs a certificate, because the browser completes the handshake before it ever sees the 30x.
+
+They **count towards the global domain uniqueness assertions**, so a redirect and an app cannot claim the same name. That is the point: it is the same namespace.
+
 ### `kind`: two shapes of app
 
 | | `"managed"` (default) | `"profile"` |

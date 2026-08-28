@@ -113,10 +113,14 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
 │   ├── deployment.nix
 │   ├── graphical.nix
 │   ├── postgresql.nix
+│   ├── tmux.nix                     ← status-bar colour as a which-box cue
 │   ├── user.nix                     ← multiuser module
+│   ├── vscode.nix                   ← `code` from any shell, not only VS Code's
 │   └── webstack.nix
 ├── scripts/
-│   ├── deploy-gate.sh               ← the 5-step deploy gate
+│   ├── access-guard.sh              ← ssh logins a deploy would take away
+│   ├── cache-guard.sh               ← binary caches on the machine that builds
+│   ├── deploy-gate.sh               ← the 7-step deploy gate
 │   ├── deploy-migration.sh
 │   ├── live-checks.sh               ← pre-deploy and verify, over ssh
 │   └── nixos-rebuild-migration.sh
@@ -319,12 +323,27 @@ This will:
 - activate the new configuration
 
 `lib.mkPreDeployApps` adds a gated alternative to the same flake, which is the
-one to prefer: it runs the pure checks, measures the live host, builds the
-toplevel locally, deploys, and then verifies the result.
+one to prefer:
 
 ```bash
 nix run .#deploy-myNode
 ```
+
+Seven steps, in this order:
+
+| # | Step | Blocks? |
+| --- | --- | --- |
+| 1 | binary caches on the machine that will **build** | only if a human answers "abort" |
+| 2 | `nix flake check` — pure checks | yes |
+| 3 | live preconditions: reachable, Postgres major, data dir | yes |
+| 4 | build the toplevel locally | yes |
+| 5 | ssh access this deploy would remove | a finding only warns; **exit 2 blocks**, and means the guard never looked |
+| 6 | deploy | its exit code is **recorded, not obeyed** |
+| 7 | verify: `/run/current-system` equals what was built, then the live checks | yes |
+
+Step 6 is the subtle one. deploy-rs reports failure on activations that finished, so the gate asks the machine directly instead of believing it — and step 7 is what distinguishes a false positive from a real rollback. `verify` alone cannot, because the previous generation has its units up too.
+
+`GATE_SSH_USER=<name>` makes every step, and the deploy itself, connect as that person rather than the node's default.
 
 ## 🐘 PostgreSQL migration (deploy-migration)
 
@@ -458,13 +477,17 @@ This avoids installing PostgreSQL migration tooling on machines that don't use P
 Full documentation is available in the [`/docs/`](./docs/) directory:
 
 - [Architecture](./docs/architecture.md)
+- [Architecture overview](./docs/architecture.md)
 - [Common Modules](./docs/modules/common.md)
 - [Users](./docs/modules/user.md)
 - [Graphical configuration](./docs/modules/graphical.md)
+- [tmux](./docs/modules/tmux.md)
+- [VS Code remote CLI](./docs/modules/vscode.md)
 - [Hosts](./docs/hosts.md)
 - [Web stack](./docs/modules/webstack.md)
 - [PostgreSQL](./docs/modules/postgresql.md)
 - [Deployment](./docs/modules/deployment.md)
+- [The deploy gate and its guards](./docs/scripts/guards.md)
 - [Migration scripts](./docs/scripts/)
 
 ## 🧠 Notes

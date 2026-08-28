@@ -81,10 +81,14 @@ graphical.vscode.enable = true;
 
 ## Behavior Summary
 
-| Mode   | X11 | SDDM | Plasma | Pipewire | Fonts | Keyboard | VSCode |
+| Mode   | X11 | SDDM | Plasma | Pipewire | Fonts | Keyboard | nix-ld |
 |--------|-----|------|--------|----------|-------|----------|--------|
-| WSL    | ❌  | ❌   | ❌     | ❌       | ✔️    | ✔️       |  ✔️    |
-| Linux  | ✔️  | ✔️   | ✔️     | ✔️       | ✔️    | ✔️       |  ✔️    |
+| WSL    | ❌  | ❌   | ❌     | ❌       | ❌    | ❌       |  ✔️    |
+| Linux  | ✔️  | ✔️   | ✔️     | ✔️       | ✔️    | ✔️       |  ❌    |
+
+`graphical.fonts`, `keymap` and `variant` are consumed inside `services.xserver` and a `mkIf isGraphical`, so under `mode = "WSL"` they accept a value and do nothing. The fonts that do reach a WSL host come from `common.nix`, not from here.
+
+The last column is `graphical.vscode.enable`, whose only effect is `programs.nix-ld.enable` — the name predates what it does. It defaults to `mode == "WSL"`, and like everything else here it sits inside `mkIf graphical.enable`, so **a headless host cannot get it from this module**. Such a host sets `programs.nix-ld.enable` directly.
 
 ## Examples
 
@@ -133,7 +137,8 @@ Do not use it for:
 - Containers
 - Remote-only machines
 
-Except when this needs remote code via vscode.
+There is no exception. A headless host that wants VS Code Remote-SSH needs
+`programs.nix-ld.enable` — set it directly, because this module's whole `config` block is behind `mkIf graphical.enable` and a headless host does not enable it. For a `code` command usable from an ordinary ssh session, see `nixosModules/vscode.nix`.
 
 ## Notes
 

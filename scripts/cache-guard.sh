@@ -78,10 +78,10 @@ merge_setting() {
 configure() {
   mkdir -p "$(dirname "$conf")"
   touch "$conf"
-  cp "$conf" "$conf.redacted-backup"
+  cp "$conf" "$conf.cache-guard-backup"
   merge_setting extra-substituters "${missing[*]}"
   merge_setting extra-trusted-public-keys "${required_keys[*]}"
-  printf '\n  wrote %s (previous contents kept as %s.redacted-backup)\n' "$conf" "$conf"
+  printf '\n  wrote %s (previous contents kept as %s.cache-guard-backup)\n' "$conf" "$conf"
   if [ -n "$(nix config show substituters 2>/dev/null | grep -oF "${missing[0]}" || true)" ]; then
     printf '  caches are active now\n\n'
   else

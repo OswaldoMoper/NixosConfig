@@ -1,7 +1,16 @@
-{ pkgs, self, inputs, lib, ... }@args:
+{ pkgs, self, inputs, lib, ... }:
 
-let home = "/home/omoper";
-  myEmail = "omoper@example.com";
+# A worked example, not a machine anyone owns.
+#
+# It is a real host definition -- it evaluates, and it is what exercises the
+# modules in this repo -- but every name, address and domain in it comes from
+# the ranges reserved for documentation (RFC 2606, RFC 5737). Real machines
+# belong in the private flake that consumes this one, which is the whole point
+# of the split described in docs/architecture.md.
+
+let
+  home = "/home/omoper";
+  exampleEmail = "omoper@example.com";
 in
 {
   imports = [ ./hardware/WSL.nix ];
@@ -11,17 +20,19 @@ in
     AllowUsers = [ "omoper" "guest" ];
   };
 
+  # Two users, to show both shapes: one that drives every Home Manager feature,
+  # and one that only needs an account and a key.
   myUsers = lib.mkMerge [
     {
       omoper = {
         enable = true;
         native.description = "Oswaldo Moper";
-        email = myEmail;
+        email = exampleEmail;
         home = {
           enable = true;
           git = {
             enable = true;
-            tag = "Oswaldo Moper";
+            tag = "OswaldoMoper";
           };
           msmtp = {
             enable = true;
@@ -29,12 +40,16 @@ in
           };
           sshKeys = {
             enable = true;
+            # Both fields are required together: an enabled basename with an
+            # empty name would emit ~/.ssh/_ed25519 and ~/.ssh/ -- the directory.
             baseName = {
               enable = true;
               name = "OswaldoMoper";
             };
             names = [ "id_ed25519" ];
           };
+          # IdentityFile accumulates across matching blocks, so IdentitiesOnly
+          # is what stops ssh also offering everything in the agent.
           sshHosts."203.0.113.7" = {
             User = "root";
             IdentityFile = [ "~/.ssh/id_ed25519" ];
@@ -47,33 +62,19 @@ in
       guest = {
         enable = true;
         native.description = "Guest User";
-        email = "user@example.com";
-        home = {
-          enable = true;
-          git = {
-            enable = true;
-            tag = "LupitaZP";
-          };
-          msmtp = {
-            enable = true;
-            passwordFile = "/home/guest/password.txt";
-          };
-          sshKeys = {
-            enable = true;
-            names = [ "id_ed25519" ];
-          };
-        };
         native.openssh.authorizedKeys.keys = [
-          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJm3IcBc1AhUqWxBbPRbV0R8l+hVhvb3jbE3mH53xDf2 omoper@spartanWSL"
-          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA guest@conect"
+          # Replace with real public keys. These are syntactically valid and
+          # belong to nobody.
+          "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA guest@example"
         ];
       };
     }
   ];
+
   # Web Hosting Service
   webStack = {
     enable = true;
-    email = myEmail;
+    email = exampleEmail;
     manager = "omoper";
     tunnel = {
       enable = true;
@@ -81,11 +82,12 @@ in
       useNginx = false;
       ssh = {
         enable = true;
-        domain = "ssh.oswaldomoper.com";
+        domain = "ssh.example.com";
         port = 22;
       };
     };
   };
+
   # PostgreSQL server
   postgresql = {
     enable = true;
@@ -94,33 +96,33 @@ in
     dumpFile = "${home}/postgres_backup_local.sql";
     logStatements = "all";
   };
+
   # Graphical Environment
   graphical = {
     enable = true;
     mode = "WSL";
   };
+
   # WSL config
   wsl = {
     enable = true;
     defaultUser = "omoper";
-    tarball.configPath = "/home/omoper/NixosConfig";
+    tarball.configPath = "${home}/NixosConfig";
   };
-  # Enable and configure networking and firewall
+
   networking = {
     networkmanager.enable = true;
     wireless.enable = lib.mkForce false;
-    # Open ports in the firewall
     firewall = {
       enable = true;
       trustedInterfaces = [ "lo" "eth0" ];
-      allowedTCPPorts = [  ];
-      allowedUDPPorts = [  ];
+      allowedTCPPorts = [ ];
+      allowedUDPPorts = [ ];
     };
   };
-  # List packages installed in system profile.
+
   environment = {
     systemPackages = with pkgs; [
-      # Common packages
       rename
       wget
       gparted
@@ -128,7 +130,6 @@ in
       tree
       gnumake
       gmp
-      # Requisites for my work
       any-nix-shell
       curl
       direnv
@@ -137,28 +138,27 @@ in
       nix-direnv
       nix-prefetch-git
       oh-my-zsh
-      # Requisites for PostgreSQL
-      self.packages.x86_64-linux.nixos-rebuild-migration
-      # Requisites for oswaldomoper.com
       cloudflared
       sops
-      # Requisites for secrets
+      self.packages.x86_64-linux.nixos-rebuild-migration
       inputs.agenix.packages.${pkgs.stdenv.hostPlatform.system}.default
-      # Requisites for deploying tools
       inputs.deploy-rs.packages.${pkgs.stdenv.hostPlatform.system}.default
       self.packages.${pkgs.stdenv.hostPlatform.system}.deploy-migration
     ];
   };
+
+  # A safety cue, not decoration: give every machine a different one, and make
+  # the dangerous one look alarming. Green here means "local, nothing to lose".
   tmux.accent = "#7fff00";
 
-  # General Nix config
   nix = lib.mkMerge [
     {
       settings = {
-        # Nix users config
         allowed-users = [ "@wheel" "omoper" ];
         trusted-users = [ "root" "omoper" ];
 
+        # Public third-party caches. Without them a Haskell closure compiles
+        # GHC from source on the machine that builds, which is this one.
         extra-substituters = [
           "https://cache.iog.io"
           "https://nixcache.reflex-frp.org"
@@ -169,6 +169,9 @@ in
         ];
       };
     }
+    # A second definition to show that these lists concatenate rather than
+    # override -- which is why "root" appears once here and still ends up in
+    # the generated nix.conf twice.
     {
       settings = {
         allowed-users = [ "guest" ];
