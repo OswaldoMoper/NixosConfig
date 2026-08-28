@@ -106,7 +106,9 @@ hosts/hardware/<name>.nix
 
 - Hardware files **must not** be shared between machines
 - If you reinstall or change disks, regenerate the file
-- If you use WSL, you **don't** need a hardware file
+- Under WSL there is nothing to generate: `nixos-wsl` provides the bootloader and the filesystems, and the VM's memory and swap come from `.wslconfig` on the Windows side. `hosts/hardware/WSL.nix` exists and is empty, so the convention holds for every host
+
+> **Do not declare `swapDevices` on a WSL host.** It creates a file inside the VM's own filesystem — one more layer than the swap disk WSL already manages, and it eats the same `/` it is meant to relieve. Raise `swap` in `.wslconfig` instead.
 
 ## Examples
 
