@@ -17,7 +17,7 @@ server_major() {
   runuser -u postgres -- psql -tAc 'SHOW server_version_num' | tr -d '[:space:]'
 }
 
-before="$(server_major)"
+before="$(server_major || true)"
 if ! [[ "$before" =~ ^[0-9]+$ ]]; then
   log "ERROR: could not read the local PostgreSQL version; aborting"
   exit 1
@@ -49,7 +49,7 @@ if ! systemctl is-active --quiet postgresql; then
   }
 fi
 
-after="$(server_major)"
+after="$(server_major || true)"
 if ! [[ "$after" =~ ^[0-9]+$ ]]; then
   log "ERROR: could not read the PostgreSQL version after the rebuild"
   exit 1
@@ -70,7 +70,8 @@ if ! grep -q "PostgreSQL database dump" "$BACKUP"; then
   log "ERROR: ${BACKUP} does not look like a pg_dumpall output; restore aborted"
   exit 1
 fi
-runuser -u postgres -- psql -f "$BACKUP" postgres || {
+
+runuser -u postgres -- psql postgres < "$BACKUP" || {
   log "ERROR: restore failed"
   exit 1
 }
