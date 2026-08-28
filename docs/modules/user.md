@@ -124,12 +124,12 @@ home.msmtp = {
 
 ## SSH Key Auto-loading
 
-When `home.sshKeys.enable = true`, the module:
+The module does not load keys. It writes an `ssh_config` that **names** them, and turns on the agent so that whatever ssh unlocks stays unlocked:
 
-- enables `ssh-agent`
-- loads keys automatically
+- `services.ssh-agent.enable`, gated on `home.sshKeys.enable`
+- `AddKeysToAgent yes` plus one `IdentityFile` line per name below, under `Host *`
 
-Supports
+The distinction matters: an identity named here that has no file on disk is still **offered** by ssh, and each offer costs an attempt against a server's `MaxAuthTries`.
 
 ### Base name keys
 
@@ -140,11 +140,13 @@ sshKeys.baseName = {
 };
 ```
 
-Loads:
+Names:
 
 - `~/.ssh/MyKey`
 - `~/.ssh/MyKey_ed25519`
 - `~/.ssh/MyKey_rsa`
+
+**Both `enable` and a non-empty `name` are required.** With an empty name the three would become `~/.ssh/_ed25519`, `~/.ssh/_rsa` and `~/.ssh/` — the directory itself — so the block is skipped entirely instead.
 
 ### Additional keys
 
@@ -152,10 +154,24 @@ Loads:
 sshKeys.names = [ "work" "github" ];
 ```
 
-Loads:
+Names `~/.ssh/work` and `~/.ssh/github`, independently of `baseName`.
 
-- `~/.ssh/work`
-- `~/.ssh/github`
+### `home.sshHosts` — per-host blocks
+
+```Nix
+sshHosts."203.0.113.7" = {
+  User = "root";
+  IdentityFile = [ "~/.ssh/id_ed25519" ];
+  IdentitiesOnly = true;
+};
+```
+
+Attribute names are written into `ssh_config` verbatim; its keywords are case-insensitive.
+
+Two things worth knowing before using it:
+
+- `IdentityFile` **accumulates** across every matching block. A host block **adds to** the global ones rather than replacing them, which is why `IdentitiesOnly = true` belongs here: it is what stops ssh from also offering everything in the agent.
+- The blocks are merged as `sshHosts // { "*" = … }`, so a pattern literally named `*` would be silently discarded. Put global directives in the module, not in a `"*"` entry.
 
 ## Examples
 
@@ -164,7 +180,7 @@ Loads:
 ```Nix
 {pkgs, ...}: {
   # ... other host configurations ...
-  myUsers.alice.enable = true;
+  myUsers.omoper.enable = true;
   # ... other host configurations ...
 }
 ```

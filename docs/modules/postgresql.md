@@ -35,9 +35,51 @@ PostgreSQL version to install. Defaults to `pkgs.postgresql_17`.
 
 Port for the PostgreSQL server. Defaults to `5432`.
 
+## `postgresql.ensure` — the main path
+
+Databases and roles that must exist, with the role owning its database:
+
+```nix
+{
+  postgresql.ensure = [
+    { database = "myapp"; role = "myapp"; }
+    { database = "other"; role = "other"; passwordFile = "/run/agenix/other-db"; }
+  ];
+}
+```
+
+| Field | Default | |
+| --- | --- | --- |
+| `database` | — | required |
+| `role` | — | required; the role the app connects as |
+| `owner` | `true` | transfer ownership of the database to the role |
+| `passwordFile` | `null` | path **on the target host**; `null` leaves the password alone, which is what `authMode = "trust"` wants |
+
+`owner` exists because upstream's `ensureDBOwnership` only covers a database named after its role, and the historical pairs here are not.
+
+`passwordFile` is a **string, not a path**: interpolating a path copies the file into the world-readable store. The reconciling unit reads it as root, so it need not be readable by `postgres`.
+
+### Additive only, on purpose
+
+It **never drops or renames anything it does not know about**, because these machines predate this config and hold databases nothing declares. A "desired state" that also removed would have destroyed them.
+
+### How it is applied
+
+Creation goes through `services.postgresql.ensureDatabases` and `ensureUsers`, which create when absent and do nothing when present. Everything else — ownership, passwords — is reconciled on every activation by **`postgresql-ensure.service`**.
+
+That unit is deliberately its own, rather than a `postgresql-setup.postStart` fragment: that hook is a **single script shared with every other module that appends to it**, so one failure there would silently skip whatever came after — including another module's `ALTER USER`.
+
+### Assertions
+
+- every entry needs a non-empty database and role
+- two entries cannot name the same database, or they would fight over its owner
+- a database already declared by another module in `ensureDatabases` is refused
+
 ## Initial Setup
 
-The module supports automatic database initialization:
+> The single-pair form of `ensure`, kept for compatibility and **stricter**: it requires a password file where `ensure` allows none. The module emits a warning when it is used.
+>
+> The name misleads: its SQL runs on **every** activation, not only the first.
 
 ```nix
 postgresql.initialSetup = {

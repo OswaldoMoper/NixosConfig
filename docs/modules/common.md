@@ -35,7 +35,6 @@ Ensures stable behavior across NixOS upgrades. Currently, `26.05`
 ### nixpkgs configuration
 
 - `allowUnfree = true`
-- Optional overlays (commented out)
 
 ### Home Manager defaults
 
@@ -44,7 +43,7 @@ Ensures stable behavior across NixOS upgrades. Currently, `26.05`
 
 ### SSH
 
-- Enables both `openssh` and `sshd`
+- Enables `services.openssh`
 
 ### Fonts
 

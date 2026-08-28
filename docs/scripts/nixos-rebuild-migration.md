@@ -39,10 +39,12 @@ If the home directory is invalid, the script aborts.
 The script runs:
 
 ```Shell
-psql --version
+runuser -u postgres -- psql -tAc 'SHOW server_version_num'
 ```
 
-If this fails, the rebuild is aborted.
+`server_version_num` is the **server's** version (major × 10000 + minor). Reading `psql --version` instead would report the *client's*, which is a different number, and asking the wrong one is the original bug this script exists to avoid.
+
+If the value is not a number, the rebuild is aborted before anything is touched.
 
 ### 3. Create local PostgreSQL backup
 
@@ -55,8 +57,10 @@ $USER_HOME/backups/postgres_backup.sql
 using:
 
 ```Shell
-pg_dumpall -U postgres
+runuser -u postgres -- pg_dumpall
 ```
+
+The redirection runs as the invoking user, so the file lands in their home and belongs to them — which is why the restore in step 8 is piped rather than opened by `postgres`.
 
 If this fails, the rebuild is aborted.
 
@@ -101,24 +105,40 @@ If PostgreSQL was upgraded, a restore is required.
 
 ### 8. Restore (only if needed)
 
-If a version upgrade is detected:
+Only when the major version went **up** — an unchanged or lower version exits 0 with no restore.
 
-- The backup is validated (must contain “PostgreSQL database dump”)
+Two guards first: the file must be non-empty, and must contain `PostgreSQL database dump`. The second is a shape check, because a truncated dump restores happily into a fresh cluster and leaves it half empty.
 
-If the restore fails, the script aborts.
+The restore is piped rather than `psql -f`:
+
+```Shell
+runuser -u postgres -- psql postgres < $BACKUP
+```
+
+`postgres` cannot traverse a `0700` home to open a file written by the invoking user, so the file is read by whoever owns it and handed to `psql` on stdin.
+
+On success the working backup is removed; `$USER_HOME/postgres_backup_local.sql` is always kept.
 
 ## Error Handling
 
-The script uses:
+The script is packaged with `pkgs.writeShellApplication`, which prepends:
 
 ```Shell
-set -e
+set -o errexit -o nounset -o pipefail
 ```
 
-and explicit error blocks:
+The script itself does not set these, and that matters in one place: a command substitution whose command fails takes the script down **at the assignment**, before any check of the captured value. The version reads are therefore written as
 
 ```Shell
-|| { log "ERROR: ..."; exit 1 }
+before="$(server_major || true)"
+```
+
+so the "could not read the version" message is reachable at all. Without the `|| true` the operator gets exit 1 and no output.
+
+Everything else uses explicit blocks:
+
+```Shell
+|| { log "ERROR: ..."; exit 1; }
 ```
 
 Failures in any of these steps abort the migration:
@@ -141,13 +161,11 @@ $HOME/postgres_migration.log
 
 This includes:
 
-- user resolution  
-- backup creation  
-- backup copy  
-- rebuild execution  
-- version comparison  
-- restore operations  
-- validation queries  
+- user resolution
+- the version before and after the rebuild
+- backup creation and copy
+- rebuild execution
+- whether a restore was needed, and its outcome
 
 ## When to use this script
 

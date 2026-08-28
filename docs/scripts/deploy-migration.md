@@ -1,6 +1,6 @@
 # deploy-migration — Remote PostgreSQL Migration Helper
 
-This script performs safe PostgreSQL migrations during **remote deploys** using `deploy-rs`. It ensures that database upgrades never break a production deployment by automatically backing up, restoring and validating PostgreSQL data on the remote server. All operations are logged to:
+This script performs safe PostgreSQL migrations during **remote deploys** using `deploy-rs`. It backs up the remote cluster before deploying, and restores into the new one only when the deploy moved PostgreSQL to a new major version. All operations are logged to:
 
 ```bash
 $HOME/deploy_migration.log
@@ -9,142 +9,152 @@ $HOME/deploy_migration.log
 ## Purpose
 
 - Protect remote PostgreSQL instances during deploys
-- Automatically detect PostgreSQL version upgrades
+- Automatically detect PostgreSQL major version upgrades
 - Create and download full backups before deployment
 - Restore data only when required
 - Abort deployment safely on any failure
 - Provide clear logging for auditing and debugging
 
-This script is intended to be run locally:
+This script runs on your machine, not on the server:
 
 ```Shell
 deploy-migration .#myServer
 ```
 
+The flake defaults to `.` and can be overridden with `DEPLOY_MIGRATION_FLAKE`.
+
 ## Workflow
 
 ### 1. Resolve deployment target
 
-The script extracts:
+The script resolves, using `nix eval` against the flake and one `ssh getent passwd`:
 
-- `TARGET` (flake deploy target)
-- `HOST` (remote hostname)
-- `USER` (SSH user)
-- `REMOTE_HOME` (remote user's home directory)
-- `APP` (derived from remote home path)
+| Variable | Where it comes from |
+| --- | --- |
+| `TARGET` | the argument, with a leading `.#` stripped |
+| `HOST` | `deploy.nodes.<TARGET>.hostname` |
+| `SSH_USER` | `GATE_SSH_USER` if set, otherwise `deploy.nodes.<TARGET>.profiles.system.sshUser` |
+| `REMOTE_HOME` | `getent passwd` on the remote |
+| `BACKUP` | `$REMOTE_HOME/backups/postgres_deploy_backup.sql` |
+| `LOCAL_COPY` | `$HOME/postgres_backup_$TARGET.sql` |
 
-These values are obtained using:
+`GATE_SSH_USER` is the same override the deploy gate takes, so someone deploying under their own name can use this path too. When it is set, `--ssh-user` is also passed through to `deploy`.
 
-- `nix eval`
-- `ssh getent passwd`
-
-### 2. Create remote PostgreSQL backup
-
-The script runs on the remote server:
+### 2. Read the version before anything happens
 
 ```Shell
-pg_dumpall -U postgres > $REMOTE_HOME/backups/postgres_deploy_backup.sql
+sudo -u postgres psql -tAc 'SHOW server_version_num'
 ```
+
+`server_version_num` is the **server's** version (major × 10000 + minor). Not `psql --version`, which reports the client's and is a different number — that confusion is the bug these scripts exist to avoid.
+
+If the value is not a number, the script aborts before touching anything.
+
+### 3. Create remote PostgreSQL backup
+
+On the remote:
+
+```Shell
+mkdir -p $REMOTE_HOME/backups && sudo -u postgres pg_dumpall > $BACKUP
+```
+
+The redirection runs as `SSH_USER`, so the file lands in their home and belongs to them. That matters in step 6.
 
 If this fails, the deployment is aborted.
 
-### 3. Download backup locally
-
-The backup is copied to:
+### 4. Download backup locally
 
 ```Shell
-$HOME/postgres_backup_<APP>.sql
+scp $REMOTE:$BACKUP $HOME/postgres_backup_$TARGET.sql
 ```
 
-This ensures a local copy exists even if the remote restore fails.
+This ensures a local copy exists even if the remote restore fails. It is **kept**, never deleted.
 
-### 4. Run deploy-rs
-
-The script executes:
+### 5. Run deploy-rs
 
 ```Shell
-deploy .#<TARGET>
+deploy .#<TARGET> [--ssh-user <GATE_SSH_USER>]
 ```
 
 If deploy-rs fails, the migration is canceled.
 
-### 5. Detect PostgreSQL version change
+### 6. Detect the version change, and restore only if it went up
 
-The script compares:
+The version is read again the same way. Then:
 
-- version before deploy
-- version after deploy
+- **`after <= before`** — no restore is needed. The remote dump is removed and the script exits 0.
+- **`after > before`** — the cluster is new and empty, so the dump is restored.
 
-If PostgreSQL was upgraded, a restore is required.
-
-### 6. Restore (only if needed)
-
-If a version upgrade is detected:
-
-- The backup is restored on the remote server:
+Before restoring, two guards:
 
 ```Shell
-psql -U postgres < postgres_deploy_backup.sql
+test -s $BACKUP
+grep -q 'PostgreSQL database dump' $BACKUP
 ```
+
+The second is a shape check: a truncated dump restores happily into a fresh cluster and leaves it half empty.
+
+The restore itself is piped, not `psql -f`:
+
+```Shell
+cat $BACKUP | sudo -u postgres psql postgres
+```
+
+`postgres` cannot traverse a `0700` home to open a file written by `SSH_USER`, so the file is read by whoever owns it and handed to `psql` on stdin.
 
 ### 7. Cleanup
 
-Temporary remote backup files are deleted.
+The remote dump is removed on **both** paths — after a restore, and when no restore was needed. The local copy is always kept.
 
 ## Error Handling
 
-The script uses:
+The script is packaged with `pkgs.writeShellApplication`, which prepends:
 
 ```Shell
-set -e
+set -o errexit -o nounset -o pipefail
 ```
 
-and explicit error blocks:
+The script itself does not set these, which matters in one place: a command substitution whose command fails takes the whole script down **at the assignment**, before any check of the captured value. The version reads are therefore written as
 
 ```Shell
-|| { log "ERROR: ..."; exit 1 }
+before="$(server_major || true)"
 ```
 
-Failures in any of these steps abort the migration:
+so the "could not read the version" message is reachable at all. Without the `|| true` the operator gets exit 1 and no output.
 
-- remote backup creation  
-- backup download  
-- deploy-rs execution  
-- version detection  
-- restore execution  
+Everything else uses explicit blocks:
+
+```Shell
+|| { log "ERROR: ..."; exit 1; }
+```
+
+Failures in any of these abort the migration: remote backup creation, backup download, deploy-rs execution, version detection, restore execution.
 
 ## Logging
 
-All actions are logged with timestamps to:
+All actions are logged with timestamps to `$HOME/deploy_migration.log`:
 
-```Shell
-$HOME/deploy_migration.log
-```
-
-This includes:
-
-- variable resolution  
-- backup creation  
-- backup download  
-- deploy execution  
-- version comparison  
-- restore operations  
-- validation queries  
+- resolved target, host, ssh user and backup path
+- the version before and after the deploy
+- backup creation and download
+- deploy execution
+- whether a restore was needed, and its outcome
 
 ## When to use this script
 
 Use it when:
 
 - Deploying to a remote NixOS host with PostgreSQL
-- You want safe, automatic migrations
-- You want deploy-rs to be database-aware
-- You want guaranteed backups before every deploy
+- The deploy may change the PostgreSQL major version
+- You want a guaranteed backup before every deploy
 
 Do **not** use it for:
 
-- Local rebuilds (`nixos-rebuild`)
+- Local rebuilds — use `nixos-rebuild-migration`
 - Non-PostgreSQL services
 - Hosts without PostgreSQL installed
+
+> **It does not run the deploy gate.** `deploy-migration` calls `deploy` directly, so the cache guard, the access guard and the post-deploy verification do **not** run. `nix run .#deploy-<node>` is the path that has them. Folding the two together is planned.
 
 ## Example
 
@@ -152,10 +162,4 @@ Do **not** use it for:
 deploy-migration .#hetzner
 ```
 
-This will:
-
-- Back up PostgreSQL on the remote server  
-- Download the backup  
-- Deploy the new system  
-- Restore only if PostgreSQL was upgraded  
-- Log everything  
+This will back up PostgreSQL on the remote server, download the backup, deploy the new system, restore only if the major version went up, and log everything.

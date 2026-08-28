@@ -126,7 +126,7 @@ A minimal host only needs to declare:
 
   networking.hostName = "minimal";
 
-  myUsers.alice.enable = true;
+  myUsers.omoper.enable = true;
 
   graphical.enable = false;
   postgresql.enable = false;
@@ -137,7 +137,7 @@ A minimal host only needs to declare:
 This produces a valid NixOS system with:
 
 - base configuration (`common.nix`)
-- user `alice`
+- user `omoper`
 - no GUI
 - no PostgreSQL
 - no web hosting
@@ -184,7 +184,6 @@ in {
           name = "OswaldoMoper";
         };
       };
-      vscode.enable = false;
     };
   };
   environment.systemPackages = [
@@ -336,7 +335,6 @@ Servers typically enable:
           name = "OswaldoMoper";
         };
       };
-      vscode.enable = true;
     };
   };
   webStack = {

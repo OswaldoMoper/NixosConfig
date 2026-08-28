@@ -71,6 +71,20 @@ This is typically:
 deploy-rs.lib.${system}.activate.nixos self.nixosConfigurations.<host>
 ```
 
+### `deployment.<node>.profiles.<name>.magicRollback`
+
+`null` (the default) leaves deploy-rs's own behaviour, which is `true`: after activating, it checks the host still answers, and reverts if it does not.
+
+Setting it `false` trades that net for not being rolled back by a false alarm — and the false alarms are real. Both servers in the consuming repo have it off, each for its own measured incident: an activation that creates accounts and rewrites `authorized_keys.d` emits a benign non-zero from a per-user unit reload, deploy-rs reads that as a failed deploy, and the rollback re-activation can hang with every service stopped.
+
+Turning it off does **not** leave you without a check. The deploy gate asks the machine two questions afterwards — does it run the closure we built, and does it verify clean — and the first is what distinguishes a false positive from a real rollback.
+
+### `deployment.<node>.profiles.<name>.autoRollback`
+
+`null` leaves deploy-rs's default (`true`): revert if the activation script itself exits non-zero. Same trade as above, and set together with it in practice.
+
+> Only these two are optional. `lib.mkDeployNodes` emits them **only when non-null**, so a node that leaves them alone produces no attribute at all and deploy-rs keeps its own default.
+
 ## How the flake processes deployments
 
 1. Each host may define zero or more `deployment.<node>` entries.
