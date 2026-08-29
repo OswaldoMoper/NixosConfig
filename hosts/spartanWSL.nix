@@ -110,6 +110,12 @@ in
     tarball.configPath = "${home}/NixosConfig";
   };
 
+  # nm-online waits for NetworkManager to finish bringing the network up, and
+  # under WSL it never does: the interface arrives already configured, NM
+  # reports it "connected (externally)", and startup never completes. The unit
+  # then fails on every switch, for nothing.
+  systemd.services.NetworkManager-wait-online.enable = false;
+
   networking = {
     networkmanager.enable = true;
     wireless.enable = lib.mkForce false;
