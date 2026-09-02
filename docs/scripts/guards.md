@@ -1,6 +1,6 @@
-# The deploy gate and its three guards
+# The deploy gate and its four guards
 
-`deploy-gate.sh` orchestrates; `cache-guard.sh`, `access-guard.sh` and `live-checks.sh` each answer one question. They are generated per node by `lib.mkPreDeployApps`, so a consuming flake gets `deploy-<node>` and the guards individually.
+`deploy-gate.sh` orchestrates; `freshness-guard.sh`, `cache-guard.sh`, `access-guard.sh` and `live-checks.sh` each answer one question. They are generated per node by `lib.mkPreDeployApps`, so a consuming flake gets `deploy-<node>` and the guards individually.
 
 ## The gate — `deploy-gate.sh`
 
@@ -10,19 +10,24 @@ nix run .#deploy-myNode
 
 | # | Step | Blocks? |
 | --- | --- | --- |
-| 1 | binary caches on the machine that will **build** | only if a human answers "abort" |
-| 2 | `nix flake check` | yes |
-| 3 | live preconditions | yes |
-| 4 | build the toplevel locally | yes |
-| 5 | ssh access this deploy would remove | a finding warns; **exit 2 blocks** |
-| 6 | deploy | exit code **recorded, not obeyed** |
-| 7 | verify the result | yes |
+| 1 | is this checkout behind its upstream, and is the tree dirty | findings warn; **exit 2 blocks** |
+| 2 | binary caches on the machine that will **build** | only if a human answers "abort" |
+| 3 | `nix flake check` | yes |
+| 4 | live preconditions | yes |
+| 5 | build the toplevel locally | yes |
+| 6 | ssh access this deploy would remove | a finding warns; **exit 2 blocks** |
+| 7 | deploy | exit code **recorded, not obeyed** |
+| 8 | verify the result | yes |
 
-### Two decisions that are easy to misread
+### Three decisions that are easy to misread
 
-**Step 4 builds before touching the machine.** An evaluation or build error should never reach the target, and the built path is what step 7 compares against.
+**Step 1 asks the remote, and only a failed fetch stops it.** Not a git checkout, or a branch with no upstream, are facts the operator chose and can see: they warn. A fetch that fails is different — it is "I could not ask whether this tree is stale", which is the state that lets a stale tree through believing it was checked. Same shape as the access guard's exit 2.
 
-**Step 6 does not trust deploy-rs.** It reports failure on activations that finished — a benign non-zero from a per-user unit reload is enough. So the exit code is recorded and the gate asks the machine directly instead: does `/run/current-system` equal what we built, and does it verify clean? The first question is what distinguishes a false positive from a real rollback. `verify` alone cannot, because the previous generation has its units up too.
+It compares with `git merge-base --is-ancestor "$upstream" HEAD`, so **local commits you have not pushed pass**. Only commits the remote has and you lack are a finding. The dirty check ignores untracked files on purpose: a dirty git flake deploys the working tree, but untracked files never reach a closure.
+
+**Step 5 builds before touching the machine.** An evaluation or build error should never reach the target, and the built path is what step 8 compares against.
+
+**Step 7 does not trust deploy-rs.** It reports failure on activations that finished — a benign non-zero from a per-user unit reload is enough. So the exit code is recorded and the gate asks the machine directly instead: does `/run/current-system` equal what we built, and does it verify clean? The first question is what distinguishes a false positive from a real rollback. `verify` alone cannot, because the previous generation has its units up too.
 
 ### `GATE_SSH_USER`
 

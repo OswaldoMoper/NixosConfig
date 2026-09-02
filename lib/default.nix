@@ -85,6 +85,23 @@
               '';
             };
 
+          freshnessGuard =
+            nodeName:
+            pkgs.writeShellApplication {
+              name = "pre-deploy-${nodeName}-fresh";
+              runtimeInputs = with pkgs; [
+                coreutils
+                git
+              ];
+              text = ''
+                : "''${FRESH_FLAKE:=''${GATE_FLAKE:-.}}"
+                export FRESH_FLAKE
+                export FRESH_NODE=${lib.escapeShellArg nodeName}
+
+                ${builtins.readFile ../scripts/freshness-guard.sh}
+              '';
+            };
+
           cacheGuard =
             nodeName:
             pkgs.writeShellApplication {
@@ -125,6 +142,7 @@
                 export GATE_HOST=${lib.escapeShellArg hostName}
                 export GATE_HOST_ADDR=${lib.escapeShellArg node.hostname}
                 export GATE_HOST_USER="''${GATE_SSH_USER:-${sshUserOf node}}"
+                export GATE_FRESH=${lib.getExe (freshnessGuard nodeName)}
                 export GATE_CACHES=${lib.getExe (cacheGuard nodeName)}
                 export GATE_PRE_DEPLOY=${lib.getExe (liveCheck nodeName node "pre-deploy")}
                 export GATE_ACCESS=${lib.getExe (accessGuard nodeName node)}
@@ -177,6 +195,17 @@
             }
           ) nodes;
 
+          freshApps = lib.mapAttrs' (
+            nodeName: _:
+            let
+              pkg = freshnessGuard nodeName;
+            in
+            lib.nameValuePair pkg.name {
+              type = "app";
+              program = lib.getExe pkg;
+            }
+          ) nodes;
+
           gateApps = lib.mapAttrs' (
             nodeName: node:
             lib.nameValuePair "deploy-${nodeName}" {
@@ -185,7 +214,7 @@
             }
           ) nodes;
         in
-        checkApps // accessApps // cacheApps // lib.optionalAttrs (deployPkg != null) gateApps;
+        checkApps // accessApps // cacheApps // freshApps // lib.optionalAttrs (deployPkg != null) gateApps;
     in
     lib.foldl' (acc: h: acc // forHost h nixosConfigurations.${h}) { } (
       lib.attrNames nixosConfigurations
