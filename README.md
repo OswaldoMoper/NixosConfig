@@ -333,15 +333,18 @@ Seven steps, in this order:
 
 | # | Step | Blocks? |
 | --- | --- | --- |
-| 1 | binary caches on the machine that will **build** | only if a human answers "abort" |
-| 2 | `nix flake check` — pure checks | yes |
-| 3 | live preconditions: reachable, Postgres major, data dir | yes |
-| 4 | build the toplevel locally | yes |
-| 5 | ssh access this deploy would remove | a finding only warns; **exit 2 blocks**, and means the guard never looked |
-| 6 | deploy | its exit code is **recorded, not obeyed** |
-| 7 | verify: `/run/current-system` equals what was built, then the live checks | yes |
+| 1 | is this checkout missing commits the remote has, and is the tree dirty | findings only warn; **exit 2 blocks**, and means the remote could not be asked |
+| 2 | binary caches on the machine that will **build** | only if a human answers "abort" |
+| 3 | `nix flake check` — pure checks | yes |
+| 4 | live preconditions: reachable, Postgres major, data dir | yes |
+| 5 | build the toplevel locally | yes |
+| 6 | ssh access this deploy would remove | a finding only warns; **exit 2 blocks**, and means the guard never looked |
+| 7 | deploy | its exit code is **recorded, not obeyed** |
+| 8 | verify: `/run/current-system` equals what was built, then the live checks | yes |
 
-Step 6 is the subtle one. deploy-rs reports failure on activations that finished, so the gate asks the machine directly instead of believing it — and step 7 is what distinguishes a false positive from a real rollback. `verify` alone cannot, because the previous generation has its units up too.
+Step 7 is the subtle one. deploy-rs reports failure on activations that finished, so the gate asks the machine directly instead of believing it — and step 8 is what distinguishes a false positive from a real rollback. `verify` alone cannot, because the previous generation has its units up too.
+
+Step 1 is first because it is cheap and because every later step inherits its answer: a stale tree's own checks are stale too. Local commits you have not pushed pass — it asks whether the remote has commits *you* lack, not the reverse.
 
 `GATE_SSH_USER=<name>` makes every step, and the deploy itself, connect as that person rather than the node's default.
 

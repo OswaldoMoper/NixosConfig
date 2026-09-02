@@ -11,20 +11,34 @@ if [ -n "${GATE_SSH_USER:-}" ]; then
   set -- --ssh-user "$GATE_SSH_USER" "$@"
 fi
 
-step "1/7 binary caches on this machine"
+step "1/8 is this checkout current"
+# First because it is the cheapest and because every later step inherits its
+# answer: a stale tree's own checks are stale too.
+#
+# Findings warn and never block. Exit 2 is not a finding, it means the remote
+# could not be asked -- and "I did not look" must not read as "nothing to
+# report", which is the whole lesson of the access guard.
+fresh_rc=0
+"$GATE_FRESH" || fresh_rc=$?
+if [ "$fresh_rc" -eq 2 ]; then
+  printf '\nnothing was deployed\n' >&2
+  exit 1
+fi
+
+step "2/8 binary caches on this machine"
 # Only a human answering "abort" makes this stop.
 "$GATE_CACHES" || {
   printf '\nnothing was deployed\n' >&2
   exit 1
 }
 
-step "2/7 pure checks"
+step "3/8 pure checks"
 nix flake check "$GATE_FLAKE" || {
   printf 'pure checks failed; nothing was deployed\n' >&2
   exit 1
 }
 
-step "3/7 live preconditions"
+step "4/8 live preconditions"
 # The gate has to be overridable or it gets bypassed by hand, which is worse:
 # the recovery deploy for a host whose Postgres major moved is exactly the case
 # where a human has to look and decide.
@@ -39,7 +53,7 @@ else
   }
 fi
 
-step "4/7 build the toplevel"
+step "5/8 build the toplevel"
 # Building here rather than letting deploy do it keeps an evaluation error from
 # reaching the machine at all. --print-out-paths because the next step needs the
 # closure to compare against the live host.
@@ -49,7 +63,7 @@ built="$(nix build --no-link --print-out-paths \
   exit 1
 }
 
-step "5/7 ssh access this deploy would remove"
+step "6/8 ssh access this deploy would remove"
 # A finding warns and never blocks: a deliberate revocation should not need a
 # flag, and this must never be the reason an urgent deploy cannot go out.
 #
@@ -62,16 +76,16 @@ if [ "$access_rc" -eq 2 ]; then
   exit 1
 fi
 
-step "6/7 deploy"
+step "7/8 deploy"
 # The exit code is recorded, not obeyed. Measured on 2026-08-25: a per-user
 # activation warning for an account this deploy had just removed made deploy-rs
 # report failure and attempt a revoke, while the machine finished activating and
 # came up clean. Aborting here left the operator believing a successful deploy
-# had failed, with step 7 never run.
+# had failed, with step 8 never run.
 deploy_rc=0
 deploy "${GATE_FLAKE}#${GATE_NODE}" "$@" || deploy_rc=$?
 
-step "7/7 verify the result"
+step "8/8 verify the result"
 # The machine is the authority. Two questions, in order: is it running the exact
 # closure we built, and does it work? The first is what tells a false alarm apart
 # from a real rollback -- verify alone cannot, because the previous generation
