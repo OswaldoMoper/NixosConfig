@@ -60,7 +60,9 @@
                 export LIVE_PG_MAJOR=${
                   lib.escapeShellArg (if pg.enable then lib.versions.major pg.package.version else "")
                 }
-                export LIVE_DATA_DIR=${lib.escapeShellArg pg.dataDir}
+                export LIVE_DATA_DIR=${
+                  lib.escapeShellArg (if pg.enable then pg.dataDir else "")
+                }
                 export LIVE_UNITS=${lib.escapeShellArg (lib.concatStringsSep " " units)}
                 export LIVE_DATABASES=${lib.escapeShellArg (lib.concatStringsSep " " databases)}
                 export LIVE_DB_OWNERS=${lib.escapeShellArg (lib.concatStringsSep " " owners)}
