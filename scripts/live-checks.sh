@@ -15,7 +15,19 @@ warn() { printf '  WARN  %s\n' "$1" >&2; }
 
 # Client-side expansion of the remote command is the point here, so SC2029 is
 # excluded where this script is packaged.
-sshq() { ssh -o BatchMode=yes -o ConnectTimeout=10 "$remote" "$@"; }
+#
+# An explicit config path, because OpenSSH reads its default ~/.ssh from the
+# account's home in passwd, and a CI runner's is /var/empty however the job's
+# HOME is set. Empty everywhere else, which is the interactive case.
+ssh_cfg=()
+if [ -n "${LIVE_SSH_CONFIG:-}" ]; then
+  ssh_cfg=(-F "$LIVE_SSH_CONFIG")
+fi
+
+sshq() {
+  ssh ${ssh_cfg[@]+"${ssh_cfg[@]}"} \
+    -o BatchMode=yes -o ConnectTimeout=10 "$remote" "$@"
+}
 
 psql_value() {
   sshq "sudo -u postgres psql -tAc $1 ${2:-}" 2>/dev/null | tr -d '[:space:]' || true

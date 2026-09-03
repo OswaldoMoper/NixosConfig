@@ -11,6 +11,18 @@ if [ -n "${GATE_SSH_USER:-}" ]; then
   set -- --ssh-user "$GATE_SSH_USER" "$@"
 fi
 
+# Same fan-out for the config file, and for the same reason: the guards run
+# their own ssh, so a path only deploy-rs knows about leaves them failing as if
+# the host were unreachable. First in the argument list, so an explicit
+# --ssh-opts from the caller still wins.
+ssh_cfg=()
+if [ -n "${GATE_SSH_CONFIG:-}" ]; then
+  export LIVE_SSH_CONFIG="$GATE_SSH_CONFIG"
+  export ACCESS_SSH_CONFIG="$GATE_SSH_CONFIG"
+  ssh_cfg=(-F "$GATE_SSH_CONFIG")
+  set -- --ssh-opts "-F $GATE_SSH_CONFIG" "$@"
+fi
+
 step "1/8 is this checkout current"
 # First because it is the cheapest and because every later step inherits its
 # answer: a stale tree's own checks are stale too.
@@ -90,7 +102,7 @@ step "8/8 verify the result"
 # closure we built, and does it work? The first is what tells a false alarm apart
 # from a real rollback -- verify alone cannot, because the previous generation
 # also has its units up.
-live="$(ssh -o BatchMode=yes -o ConnectTimeout=10 \
+live="$(ssh ${ssh_cfg[@]+"${ssh_cfg[@]}"} -o BatchMode=yes -o ConnectTimeout=10 \
   "${GATE_HOST_USER}@${GATE_HOST_ADDR}" readlink -f /run/current-system 2>/dev/null || true)"
 
 if [ "$live" != "$built" ]; then
