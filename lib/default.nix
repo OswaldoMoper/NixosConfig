@@ -54,7 +54,8 @@
                 # fail as root, which reads as a dead host.
                 : "''${LIVE_HOST:=${node.hostname}}"
                 : "''${LIVE_SSH_USER:=''${GATE_SSH_USER:-${sshUserOf node}}}"
-                export LIVE_HOST LIVE_SSH_USER
+                : "''${LIVE_SSH_CONFIG:=''${GATE_SSH_CONFIG:-}}"
+                export LIVE_HOST LIVE_SSH_USER LIVE_SSH_CONFIG
                 export LIVE_MODE=${lib.escapeShellArg mode}
                 export LIVE_NODE=${lib.escapeShellArg nodeName}
                 export LIVE_PG_MAJOR=${
@@ -80,7 +81,8 @@
               text = ''
                 : "''${ACCESS_HOST:=${node.hostname}}"
                 : "''${ACCESS_SSH_USER:=''${GATE_SSH_USER:-${sshUserOf node}}}"
-                export ACCESS_HOST ACCESS_SSH_USER
+                : "''${ACCESS_SSH_CONFIG:=''${GATE_SSH_CONFIG:-}}"
+                export ACCESS_HOST ACCESS_SSH_USER ACCESS_SSH_CONFIG
                 export ACCESS_NODE=${lib.escapeShellArg nodeName}
 
                 ${builtins.readFile ../scripts/access-guard.sh}

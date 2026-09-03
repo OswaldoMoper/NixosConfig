@@ -60,7 +60,13 @@ fi
 # Hence two failure kinds, not one. "Access would be removed" warns and never
 # blocks, which is this script's whole stance. "I never looked" exits 2, because
 # a check that silently does not run is worse than one that fails.
-if ! probe_err="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "$remote" true 2>&1 >/dev/null)"; then
+ssh_cfg=()
+if [ -n "${ACCESS_SSH_CONFIG:-}" ]; then
+  ssh_cfg=(-F "$ACCESS_SSH_CONFIG")
+fi
+
+if ! probe_err="$(ssh ${ssh_cfg[@]+"${ssh_cfg[@]}"} \
+  -o BatchMode=yes -o ConnectTimeout=10 "$remote" true 2>&1 >/dev/null)"; then
   case "$probe_err" in
     *"Permission denied"* | *"No supported authentication"*)
       echo "access-guard: reached $remote, but could not authenticate without a prompt." >&2
@@ -78,7 +84,8 @@ if ! probe_err="$(ssh -o BatchMode=yes -o ConnectTimeout=10 "$remote" true 2>&1 
   esac
 fi
 
-live_keys="$(printf '%s' "$lister" | ssh -o BatchMode=yes -o ConnectTimeout=10 "$remote" "sh -s -- /etc" 2>/dev/null || true)"
+live_keys="$(printf '%s' "$lister" | ssh ${ssh_cfg[@]+"${ssh_cfg[@]}"} \
+  -o BatchMode=yes -o ConnectTimeout=10 "$remote" "sh -s -- /etc" 2>/dev/null || true)"
 if [ -z "$live_keys" ]; then
   # The comparison only ever reports what the live side has and the closure
   # lacks, so an empty live side passes everything -- silently, and in the one
