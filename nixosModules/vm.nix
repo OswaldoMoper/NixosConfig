@@ -105,10 +105,19 @@ in
       agenixInstall = lib.mkForce ''
         mkdir -p /run/agenix
         ${lib.concatStringsSep "\n" (
-          lib.mapAttrsToList (name: s: ''
-            printf '%s' ${lib.escapeShellArg (cfg.secretValues.${name} or "")} > ${s.path}
-            chmod 0444 ${s.path}
-          '') secrets
+          lib.mapAttrsToList (
+            name: s:
+            let
+              value = cfg.secretValues.${name} or "";
+
+              write =
+                if value == "" then ": >" else "printf '%s' ${lib.escapeShellArg value} >";
+            in
+            ''
+              ${write} ${s.path}
+              chmod 0444 ${s.path}
+            ''
+          ) secrets
         )}
       '';
     };
