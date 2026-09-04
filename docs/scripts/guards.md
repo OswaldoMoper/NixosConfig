@@ -37,6 +37,16 @@ GATE_SSH_USER=someone nix run .#deploy-myNode
 
 Makes every step **and** the deploy connect as that person rather than the node's declared `sshUser`. One name has to reach the guards and deploy alike, or the live preconditions fail as themselves before the deploy is attempted.
 
+### `GATE_SSH_CONFIG`
+
+```bash
+GATE_SSH_CONFIG=$HOME/.ssh/config nix run .#deploy-myNode
+```
+
+Same fan-out for an ssh config file: the guards run their own `ssh`, so a path only deploy-rs knows about leaves them failing as if the host were unreachable. It becomes `-F <path>` for the guards and `--ssh-opts` for deploy-rs, added first so an explicit `--ssh-opts` from the caller still wins.
+
+It exists for CI. OpenSSH resolves `~/.ssh` from the account's home **in passwd** — `/var/empty` for a runner's system user — not from the job's `HOME`, so without it a runner's key is invisible to every guard.
+
 ### `GATE_SKIP_PREFLIGHT=1`
 
 An explicit escape, because a gate without one gets bypassed by hand and stops being a gate. It exists for a known-intentional precondition mismatch. Whoever uses it next owes a reason.
@@ -79,14 +89,15 @@ Two modes over one script.
 **`pre-deploy`** — true of the machine as it stands, so it blocks:
 
 - reachable over ssh
-- the PostgreSQL major matches the pin, and *which way* a mismatch hurts (a data dir already holding
-  another major is a different problem from an empty one)
-- the data dir exists
+- **on a host that declares a database**, the PostgreSQL major matches the pin — and *which way* a mismatch hurts (a data dir already holding another major is a different problem from an empty one) — and the data dir exists
+
+The database half is conditional on purpose. A host whose whole job is to run a CI runner has no
+Postgres at all, so asserting a major there would make it undeployable.
 
 **`verify`** — only true *after* a deploy, so asserting it before would block the very deploy meant
 to create it:
 
-- every declared unit is active, home-manager units included
+- every declared unit is active — home-manager units included, and the CI runner on a host whose whole job is to run one, which otherwise verifies clean while the only thing it exists for is dead
 - every declared database exists and has tables
 - every declared role exists and owns its database
 - **collation drift**: a database built under an older glibc than the one now installed. This

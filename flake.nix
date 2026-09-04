@@ -41,6 +41,7 @@
         (import ./nixosModules/user.nix)
         (import ./nixosModules/deployment.nix)
         (import ./nixosModules/vscode.nix)
+        (import ./nixosModules/vm.nix)
       ];
     hostDir = ./hosts;
     hostFiles = builtins.filter
@@ -85,10 +86,15 @@
     inherit nixosConfigurations;
     lib = myLib;
     deploy.nodes = myLib.mkDeployNodes nixosConfigurations;
-    apps.${system} = myLib.mkPreDeployApps {
-      inherit nixosConfigurations;
-      pkgs = nixpkgs.legacyPackages.${system};
-    };
+    apps.${system} =
+      myLib.mkPreDeployApps {
+        inherit nixosConfigurations;
+        pkgs = nixpkgs.legacyPackages.${system};
+      }
+      // myLib.mkVmApps {
+        inherit nixosConfigurations;
+        pkgs = nixpkgs.legacyPackages.${system};
+      };
     packages.${system} = myPackages;
     checks.${system} = myPackages // {
       scripts =
