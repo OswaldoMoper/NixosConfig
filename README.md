@@ -115,13 +115,15 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
 │   ├── postgresql.nix
 │   ├── tmux.nix                     ← status-bar colour as a which-box cue
 │   ├── user.nix                     ← multiuser module
+│   ├── vm.nix                       ← every host as a local QEMU machine
 │   ├── vscode.nix                   ← `code` from any shell, not only VS Code's
 │   └── webstack.nix
 ├── scripts/
 │   ├── access-guard.sh              ← ssh logins a deploy would take away
 │   ├── cache-guard.sh               ← binary caches on the machine that builds
-│   ├── deploy-gate.sh               ← the 7-step deploy gate
+│   ├── deploy-gate.sh               ← the 8-step deploy gate
 │   ├── deploy-migration.sh
+│   ├── freshness-guard.sh           ← is this checkout behind its upstream
 │   ├── live-checks.sh               ← pre-deploy and verify, over ssh
 │   └── nixos-rebuild-migration.sh
 └── secrets/
@@ -329,7 +331,7 @@ one to prefer:
 nix run .#deploy-myNode
 ```
 
-Seven steps, in this order:
+Eight steps, in this order:
 
 | # | Step | Blocks? |
 | --- | --- | --- |
@@ -347,6 +349,8 @@ Step 7 is the subtle one. deploy-rs reports failure on activations that finished
 Step 1 is first because it is cheap and because every later step inherits its answer: a stale tree's own checks are stale too. Local commits you have not pushed pass — it asks whether the remote has commits *you* lack, not the reverse.
 
 `GATE_SSH_USER=<name>` makes every step, and the deploy itself, connect as that person rather than the node's default.
+
+`GATE_SSH_CONFIG=<path>` does the same for an ssh config file, reaching the guards and `deploy --ssh-opts` alike. It exists because OpenSSH resolves `~/.ssh` from the account's home in passwd — `/var/empty` for a CI runner's system user — not from the job's `HOME`.
 
 ## 🐘 PostgreSQL migration (deploy-migration)
 
@@ -479,12 +483,12 @@ This avoids installing PostgreSQL migration tooling on machines that don't use P
 
 Full documentation is available in the [`/docs/`](./docs/) directory:
 
-- [Architecture](./docs/architecture.md)
 - [Architecture overview](./docs/architecture.md)
 - [Common Modules](./docs/modules/common.md)
 - [Users](./docs/modules/user.md)
 - [Graphical configuration](./docs/modules/graphical.md)
 - [tmux](./docs/modules/tmux.md)
+- [Local VMs](./docs/modules/vm.md)
 - [VS Code remote CLI](./docs/modules/vscode.md)
 - [Hosts](./docs/hosts.md)
 - [Web stack](./docs/modules/webstack.md)

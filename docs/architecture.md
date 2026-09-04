@@ -24,6 +24,8 @@ Both sweeps filter on `.nix`. The module one must, because anything else in that
 
 `lib.mkPreDeployApps` generates the gated alternative per node: `deploy-<node>` plus the guards individually. See [the gate and its guards](./scripts/guards.md).
 
+`lib.mkVmApps` generates `run-<host>-vm` for every host that can boot one, so a change can be seen working locally before it reaches a machine. It is the **same** configuration — `vm.nix` fills in NixOS's `vmVariant`, so the host closure does not move. See [local VMs](./modules/vm.md).
+
 Deploys **build where you run them** and only copy the closure, so the servers never compile the apps. That is why binary caches are declared on the host that builds rather than in `common.nix`.
 
 ## What this repo cannot check about itself
@@ -37,7 +39,7 @@ Worth knowing before trusting a green check on a change to `lib/` or a module.
 | | |
 | --- | --- |
 | `nixosModules/` | the product: options other flakes consume |
-| `lib/` | `mkDeployNodes`, `mkPreDeployApps` |
+| `lib/` | `mkDeployNodes`, `mkPreDeployApps`, `mkVmApps` |
 | `scripts/` | the gate, its guards, the migration helpers |
 | `hosts/` | this repo's own machines — currently one |
 | `hmProfiles/` | per-user Home Manager profiles; searched via `hmProfiles.dirs`, and a consumer's own directory wins |
