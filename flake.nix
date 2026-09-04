@@ -94,6 +94,10 @@
       // myLib.mkVmApps {
         inherit nixosConfigurations;
         pkgs = nixpkgs.legacyPackages.${system};
+      }
+      // myLib.mkLocalRunApps {
+        inherit nixosConfigurations;
+        pkgs = nixpkgs.legacyPackages.${system};
       };
     packages.${system} = myPackages;
     checks.${system} = myPackages // {
