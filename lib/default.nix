@@ -29,7 +29,13 @@
           hmUsers = if cfg ? myUsers then lib.filter (n: cfg.myUsers.${n}.home.enable) (lib.attrNames cfg.myUsers) else [ ];
           units =
             map (a: a.name) (lib.filter (a: a.kind == "managed") apps)
-            ++ map (u: "home-manager-${u}") hmUsers;
+            ++ map (u: "home-manager-${u}") hmUsers
+            # A host whose whole job is CI serves no app and has no home-manager
+            # user, so without this its verify step passes while the one thing
+            # it exists to run is dead.
+            ++ map (n: "github-runner-${n}") (
+              lib.attrNames (cfg.services.github-runners or { })
+            );
           ensure = lib.optionals (cfg ? postgresql && cfg.postgresql.enable) cfg.postgresql.ensure;
           databases = lib.unique (
             map (a: a.database.name) (lib.filter (a: a.database != null) apps)
