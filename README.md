@@ -125,7 +125,8 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
 │   ├── deploy-migration.sh
 │   ├── freshness-guard.sh           ← is this checkout behind its upstream
 │   ├── live-checks.sh               ← pre-deploy and verify, over ssh
-│   └── nixos-rebuild-migration.sh
+│   ├── nixos-rebuild-migration.sh
+│   └── run-local.sh                 ← the app stack as plain processes
 └── secrets/
     └── secrets.nix                  ← agenix recipients
 ```
@@ -495,6 +496,7 @@ Full documentation is available in the [`/docs/`](./docs/) directory:
 - [PostgreSQL](./docs/modules/postgresql.md)
 - [Deployment](./docs/modules/deployment.md)
 - [The deploy gate and its guards](./docs/scripts/guards.md)
+- [Running the apps locally](./docs/scripts/run-local.md)
 - [Migration scripts](./docs/scripts/)
 
 ## 🧠 Notes

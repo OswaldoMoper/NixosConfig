@@ -51,6 +51,20 @@ let
         type = types.str;
         description = "Internal Service Name";
       };
+      unit = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "moperapp";
+        description = ''
+          systemd unit this app runs as. Defaults to 'name' for kind =
+          "managed", which is the unit webStack itself generates.
+
+          For kind = "profile" the app's own module names the unit, and the
+          name need not match: an app called MoperApp runs as moperapp.
+          Nothing here can derive it, so a host that wants tooling to reach a
+          profile app's unit says so here.
+        '';
+      };
       domain = mkOption {
         type = types.str;
         description = "Public domain for the app";

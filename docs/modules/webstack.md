@@ -160,6 +160,9 @@ Each app in `nginx.apps` or `tunnel.apps` has:
   # "managed" (default) or "profile" — see below
   kind = "managed";
   name = "myapp";
+  # systemd unit. Defaults to `name` for "managed"; a "profile" app is named by
+  # its own module and nothing here can derive it, so say so if tooling needs it
+  unit = null;
   domain = "myapp.example.com";
   port = 3000;
   # Derivation OR flake input. Required for "managed", unused for "profile"
@@ -178,6 +181,14 @@ Each app in `nginx.apps` or `tunnel.apps` has:
   extraArgs = [ "--verbose" ];
 }
 ```
+
+### `unit`, and why it is not derived
+
+For `kind = "managed"` the unit is the one webStack generates, so it is `name` and nothing needs saying.
+
+For `kind = "profile"` the app's own module owns the unit, and the two names need not match: an app declared as `MoperApp` runs as `moperapp`. Lowercasing and hoping is not a rule, so anything that has to reach a profile app's unit — [`run-<host>-local`](../scripts/run-local.md) is the first — reads this field, and skips the app with a message when it is unset.
+
+Leaving it null costs nothing: it is inert unless something asks.
 
 ### `webStack.nginx.redirects`
 
