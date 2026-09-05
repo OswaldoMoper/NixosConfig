@@ -97,7 +97,7 @@ Postgres at all, so asserting a major there would make it undeployable.
 **`verify`** — only true *after* a deploy, so asserting it before would block the very deploy meant
 to create it:
 
-- every declared unit is active — home-manager units included, and the CI runner on a host whose whole job is to run one, which otherwise verifies clean while the only thing it exists for is dead
+- every declared unit is active — home-manager units included, and the CI runner on a host whose whole job is to run one, which otherwise verifies clean while the only thing it exists for is dead. An app that ships its own module is covered too, but only once its host names the unit in `webStack ... unit`, because nothing can derive it
 - every declared database exists and has tables
 - every declared role exists and owns its database
 - **collation drift**: a database built under an older glibc than the one now installed. This
