@@ -186,9 +186,14 @@ Each app in `nginx.apps` or `tunnel.apps` has:
 
 For `kind = "managed"` the unit is the one webStack generates, so it is `name` and nothing needs saying.
 
-For `kind = "profile"` the app's own module owns the unit, and the two names need not match: an app declared as `MoperApp` runs as `moperapp`. Lowercasing and hoping is not a rule, so anything that has to reach a profile app's unit — [`run-<host>-local`](../scripts/run-local.md) is the first — reads this field, and skips the app with a message when it is unset.
+For `kind = "profile"` the app's own module owns the unit, and the two names need not match: an app declared as `MoperApp` runs as `moperapp`. Lowercasing and hoping is not a rule, so anything that has to reach a profile app's unit reads this field:
 
-Leaving it null costs nothing: it is inert unless something asks.
+| Consumer | What it does without it |
+| --- | --- |
+| [`run-<host>-local`](../scripts/run-local.md) | skips the app, saying so |
+| The deploy gate's [`verify`](../scripts/guards.md) step | **never checks that the app came up** — it passes while the app is dead |
+
+The second is why leaving it null is not free on a host that serves a profile app. Everywhere else it is inert.
 
 ### `webStack.nginx.redirects`
 

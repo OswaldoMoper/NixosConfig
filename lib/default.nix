@@ -1,5 +1,10 @@
 { lib }:
 
+let
+  # A managed app is its own unit; a profile app is named by the module that
+  # ships it, and the two need not match, so nothing here can derive it.
+  unitOf = a: if a.unit != null then a.unit else (if a.kind == "managed" then a.name else null);
+in
 {
   mkPreDeployApps =
     {
@@ -28,7 +33,9 @@
           apps = if cfg ? webStack then cfg.webStack.tunnel.apps ++ cfg.webStack.nginx.apps else [ ];
           hmUsers = if cfg ? myUsers then lib.filter (n: cfg.myUsers.${n}.home.enable) (lib.attrNames cfg.myUsers) else [ ];
           units =
-            map (a: a.name) (lib.filter (a: a.kind == "managed") apps)
+            # Every app, not only the ones webStack builds the unit for: a
+            # profile app's unit was the one nothing verified.
+            lib.filter (u: u != null) (map unitOf apps)
             ++ map (u: "home-manager-${u}") hmUsers
             # A host whose whole job is CI serves no app and has no home-manager
             # user, so without this its verify step passes while the one thing
@@ -239,7 +246,6 @@
           cfg = hostConfig.config;
           apps = if cfg ? webStack then cfg.webStack.tunnel.apps ++ cfg.webStack.nginx.apps else [ ];
 
-          unitOf = a: if a.unit != null then a.unit else (if a.kind == "managed" then a.name else null);
           hasUnit = a: unitOf a != null && cfg.systemd.services ? ${unitOf a};
 
           pg = cfg.services.postgresql;
