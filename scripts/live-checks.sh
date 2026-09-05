@@ -24,9 +24,16 @@ if [ -n "${LIVE_SSH_CONFIG:-}" ]; then
   ssh_cfg=(-F "$LIVE_SSH_CONFIG")
 fi
 
+# Every remote question goes through here, which is what lets the same checks
+# answer for the machine you are standing on. ssh joins its arguments into one
+# shell command, so `sh -c "$*"` is the same command, run by the same shell.
 sshq() {
-  ssh ${ssh_cfg[@]+"${ssh_cfg[@]}"} \
-    -o BatchMode=yes -o ConnectTimeout=10 "$remote" "$@"
+  if [ "${LIVE_LOCAL:-0}" = "1" ]; then
+    sh -c "$*"
+  else
+    ssh ${ssh_cfg[@]+"${ssh_cfg[@]}"} \
+      -o BatchMode=yes -o ConnectTimeout=10 "$remote" "$@"
+  fi
 }
 
 psql_value() {
@@ -42,7 +49,9 @@ printf '%s checks: %s (%s)\n' "$mode" "$node" "$remote"
 #
 # fail2ban answers a ban with reject, so a ban and a dead host do look identical
 # from here. An authentication failure does not.
-if ! ssh_err="$(sshq true 2>&1 >/dev/null)"; then
+if [ "${LIVE_LOCAL:-0}" = "1" ]; then
+  ok "running on the machine itself"
+elif ! ssh_err="$(sshq true 2>&1 >/dev/null)"; then
   case "$ssh_err" in
     *"Permission denied"* | *"No supported authentication"*)
       printf 'reached %s, but could not authenticate without a prompt\n' "$remote" >&2
@@ -56,8 +65,9 @@ if ! ssh_err="$(sshq true 2>&1 >/dev/null)"; then
       ;;
   esac
   exit 1
+else
+  ok "ssh reachable"
 fi
-ok "ssh reachable"
 
 # Preconditions: true of the machine as it stands, before anything is deployed.
 if [ "$mode" = "pre-deploy" ] && [ -n "${LIVE_PG_MAJOR:-}" ]; then
