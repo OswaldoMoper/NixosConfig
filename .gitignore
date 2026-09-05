@@ -1,1 +1,11 @@
+# nix build
+result
+result-*
+
+# run-<host>-vm keeps the guest's disk, and its firmware state on a UEFI host,
+# in the directory it was run from.
+*.qcow2
+*-efi-vars.fd
+*-swtpm/
+
 password.txt
