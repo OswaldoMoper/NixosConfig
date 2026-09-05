@@ -91,6 +91,15 @@
       };
     packages.${system} = myPackages;
     checks.${system} = myPackages // {
+      hosts =
+        (nixpkgs.legacyPackages.${system}).writeText "host-toplevels"
+          (lib.concatMapStringsSep "\n"
+            (name: "${name} ${
+              builtins.unsafeDiscardStringContext
+                nixosConfigurations.${name}.config.system.build.toplevel.drvPath
+            }")
+            (lib.attrNames nixosConfigurations));
+
       scripts =
         (nixpkgs.legacyPackages.${system}).runCommand "shellcheck-scripts"
           { nativeBuildInputs = [ (nixpkgs.legacyPackages.${system}).shellcheck ]; }
