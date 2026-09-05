@@ -171,6 +171,25 @@ let
               type = types.str;
               description = "PostgreSQL role the app connects as.";
             };
+            passwordFile = mkOption {
+              type = types.nullOr types.str;
+              default = null;
+              example = "/run/agenix/myapp-db-password";
+              description = ''
+                Path on the target host to a file holding the role's password.
+                A string rather than a path, so a path literal cannot copy the
+                secret into the world-readable nix store.
+
+                Null leaves the role's password alone, which is what
+                postgresql.authMode = "trust" wants. Set it and the database
+                reconciles the role to that value on every activation.
+
+                The same value usually has to reach the app too, through
+                'environmentFile'. Setting only one of the two leaves the app
+                sending a password the cluster does not have, which reads as
+                the database rejecting it rather than as a missing pair.
+              '';
+            };
           };
         });
         default = null;
@@ -254,6 +273,7 @@ in
       postgresql.ensure = map (a: {
         database = a.database.name;
         role = a.database.user;
+        inherit (a.database) passwordFile;
       }) (lib.filter (a: a.database != null) (cfg.tunnel.apps ++ cfg.nginx.apps));
 
       assertions = let allApps = cfg.tunnel.apps ++ cfg.nginx.apps;
