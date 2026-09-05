@@ -252,6 +252,25 @@ systemd reads at start time and that never enters the store:
 }
 ```
 
+### `database`, and the pair that has to stay in step
+
+`database` declares that the app needs the host's PostgreSQL. It orders the unit after `postgresql.service`, lets the pre-deploy checks confirm the names really reach the app through its environment, and writes the pair into [`postgresql.ensure`](./postgresql.md), which is what actually creates the database and the role and transfers ownership.
+
+```Nix
+{
+  database = {
+    name = "myapp";
+    user = "myapp";
+    passwordFile = "/run/agenix/myapp-db-password";
+  };
+  environmentFile = "/run/agenix/myapp-env";     # contains MYAPP_PGPASS=<the same value>
+}
+```
+
+`passwordFile` is optional and null leaves the role's password alone, which is what `postgresql.authMode = "trust"` wants. Set it, and the database reconciles the role to that value on every activation.
+
+**The trap is that the same secret has to exist twice** — once where the database reads it, once where the app does. They are separate files because they are read by different things at different times, and setting only one leaves the app sending a password the cluster does not have. That fails as *"the database rejected the app"*, which sends you looking at the wrong half.
+
 ### Package Resolution
 
 The module accepts:

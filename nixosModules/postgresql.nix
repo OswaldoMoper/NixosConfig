@@ -15,6 +15,14 @@ let
     };
 
   quoted = s: ''"${s}"'';
+
+  adminRule = "local all postgres peer map=postgres";
+
+  renderRule =
+    r:
+    lib.concatStringsSep " " (
+      [ r.type r.database r.role ] ++ lib.optional (r.address != null) r.address ++ [ r.method ]
+    );
 in
 {
   options.postgresql = {
@@ -131,9 +139,68 @@ in
       type = types.enum [ "trust" "md5" "scram" ];
       default = "trust";
       description = ''
-        Authentication mode for local connections. "scram" is emitted as
+        Authentication mode for application traffic. "scram" is emitted as
         scram-sha-256, which is what pg_hba actually accepts.
+
+        It does not govern the administrative socket: the postgres superuser
+        keeps peer authentication whatever this says, because the unit that
+        sets the role passwords has to get in before there are any.
       '';
+    };
+
+    authRules = mkOption {
+      default = [ ];
+      example = [
+        {
+          role = "myapp";
+          address = "127.0.0.1/32";
+          method = "trust";
+        }
+      ];
+      description = ''
+        Per-role pg_hba entries, emitted before the catch-all that authMode
+        produces. pg_hba is first-match-wins, so these win for the roles they
+        name and everything else falls through.
+
+        This exists because the module fixes the whole of
+        services.postgresql.authentication at a priority that discards other
+        definitions, including a `mkAfter` from an application's own module.
+        That is deliberate -- one place decides who may authenticate on a host
+        several applications share -- but it means a role needing an exception
+        has to be named here rather than injected from elsewhere.
+      '';
+      type = types.listOf (types.submodule {
+        options = {
+          type = mkOption {
+            type = types.enum [ "local" "host" "hostssl" "hostnossl" ];
+            default = "host";
+            description = "Connection type. \"local\" is the Unix socket and takes no address.";
+          };
+          database = mkOption {
+            type = types.str;
+            default = "all";
+            description = "Database this rule covers.";
+          };
+          role = mkOption {
+            type = types.str;
+            description = "Role this rule covers.";
+          };
+          address = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            example = "127.0.0.1/32";
+            description = "Client address. Required unless type is \"local\".";
+          };
+          method = mkOption {
+            type = types.str;
+            example = "trust";
+            description = ''
+              pg_hba method, written exactly as pg_hba spells it: scram-sha-256,
+              not scram.
+            '';
+          };
+        };
+      });
     };
 
     logStatements = mkOption {
@@ -174,6 +241,18 @@ in
         message = "postgresql.ensure: two entries name the same database, so they would fight over its owner";
       }
       {
+        assertion = lib.all (r: (r.type == "local") == (r.address == null)) cfg.authRules;
+        message = "postgresql.authRules: type \"local\" takes no address, and every other type needs one";
+      }
+      {
+        assertion =
+          let
+            keys = map (r: "${r.type} ${r.database} ${r.role} ${toString r.address}") cfg.authRules;
+          in
+          lib.length (lib.unique keys) == lib.length keys;
+        message = "postgresql.authRules: two rules match the same connection, so the second is dead";
+      }
+      {
         assertion =
           let
             all = config.services.postgresql.ensureDatabases;
@@ -190,11 +269,15 @@ in
       settings.port = cfg.port;
       enableTCPIP = cfg.tcp.enable;
 
-      authentication = pkgs.lib.mkOverride 10 ''
-        local all all ${authMethod}
-        host all all ::1/128 ${authMethod}
-        host all all 127.0.0.1/32 ${authMethod}
-      '';
+      authentication = pkgs.lib.mkOverride 10 (
+        lib.concatMapStrings (l: l + "\n") (
+          [ adminRule ] ++ map renderRule cfg.authRules ++ [
+            "local all all ${authMethod}"
+            "host all all ::1/128 ${authMethod}"
+            "host all all 127.0.0.1/32 ${authMethod}"
+          ]
+        )
+      );
       settings.log_statement = cfg.logStatements;
 
       ensureDatabases = map (e: e.database) entries;

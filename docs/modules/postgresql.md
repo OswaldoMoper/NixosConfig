@@ -132,23 +132,58 @@ at the same time. This is enforced by assertions.
 
 ## Authentication
 
-The module configures `pg_hba.conf` using:
+The module owns `pg_hba.conf` outright: it fixes `services.postgresql.authentication` at a priority that discards every other definition, including upstream's defaults and a `mkAfter` from an application's own module. That is deliberate — on a host several applications share, **one place decides who may authenticate** — and it has two consequences worth stating plainly.
+
+### The file it writes
+
+```text
+local all postgres peer map=postgres     ← always, whatever authMode says
+<postgresql.authRules, in order>
+local all all <authMode>
+host all all ::1/128 <authMode>
+host all all 127.0.0.1/32 <authMode>
+```
+
+`pg_hba` is **first-match-wins**, which is why the specific rules come first and the catch-all last.
+
+### `postgresql.authMode`
 
 ```Nix
 postgresql.authMode = "trust" | "md5" | "scram";
 ```
 
-This affects:
+Governs **application traffic**: the local socket and both loopback addresses. `"scram"` is emitted as `scram-sha-256`, which is what `pg_hba` actually accepts.
 
-- local connections
-- IPv4 localhost
-- IPv6 localhost
+### The administrative rule, and why it is not optional
 
-Example:
+`local all postgres peer map=postgres` is emitted whatever `authMode` says, because `postgresql-setup`, `postgresql-ensure`, the migration scripts and the live checks all reach the socket as the `postgres` system user with **no password**.
+
+Without it, `authMode = "scram"` is a deadlock at the first activation: the unit that sets the role passwords cannot connect, because there are no passwords yet. Measured against a real cluster — the connection is refused with `Password for user postgres`, and every dump and restore path goes with it.
+
+Upstream's other default, `local all all peer`, is deliberately **not** emitted. It would require each application's system user to match the role it connects as, which is rarely true — an app running as `myapp-svc` and connecting as `myapp` would stop working the moment it appeared.
+
+### `postgresql.authRules`
+
+Per-role exceptions, emitted before the catch-all.
 
 ```Nix
-postgresql.authMode = "scram";
+postgresql.authRules = [
+  { role = "devrole"; address = "127.0.0.1/32"; method = "trust"; }
+  { type = "local"; role = "devrole"; method = "trust"; }
+];
 ```
+
+| Field | Default | |
+| --- | --- | --- |
+| `type` | `"host"` | `local`, `host`, `hostssl`, `hostnossl`. `local` is the socket and takes no address |
+| `database` | `"all"` | |
+| `role` | — | required |
+| `address` | `null` | required unless `type = "local"` |
+| `method` | — | written as `pg_hba` spells it: `scram-sha-256`, not `scram` |
+
+This is the supported way for a role to keep an exception when the host moves to `scram` — an application still in a development mode that expects `trust`, for instance. Because the module discards a `mkAfter` from elsewhere, injecting the rule from the application's own module would fail **silently**: the lines simply never reach the file.
+
+Two assertions guard it: an address on a `local` rule, or a missing one anywhere else, and two rules matching the same connection — where the second is dead rather than wrong, which is worse.
 
 ## TCP Settings
 
