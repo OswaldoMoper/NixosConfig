@@ -65,7 +65,12 @@ if [ -n "${ACCESS_SSH_CONFIG:-}" ]; then
   ssh_cfg=(-F "$ACCESS_SSH_CONFIG")
 fi
 
-if ! probe_err="$(ssh ${ssh_cfg[@]+"${ssh_cfg[@]}"} \
+# On the box there is nothing to reach and nothing to authenticate against, so
+# the probe and its two failure kinds do not apply. The comparison itself is
+# identical: the same lister, against the same /etc.
+if [ "${ACCESS_LOCAL:-0}" = "1" ]; then
+  remote="this machine"
+elif ! probe_err="$(ssh ${ssh_cfg[@]+"${ssh_cfg[@]}"} \
   -o BatchMode=yes -o ConnectTimeout=10 "$remote" true 2>&1 >/dev/null)"; then
   case "$probe_err" in
     *"Permission denied"* | *"No supported authentication"*)
@@ -84,8 +89,12 @@ if ! probe_err="$(ssh ${ssh_cfg[@]+"${ssh_cfg[@]}"} \
   esac
 fi
 
-live_keys="$(printf '%s' "$lister" | ssh ${ssh_cfg[@]+"${ssh_cfg[@]}"} \
-  -o BatchMode=yes -o ConnectTimeout=10 "$remote" "sh -s -- /etc" 2>/dev/null || true)"
+if [ "${ACCESS_LOCAL:-0}" = "1" ]; then
+  live_keys="$(printf '%s' "$lister" | sh -s -- /etc 2>/dev/null || true)"
+else
+  live_keys="$(printf '%s' "$lister" | ssh ${ssh_cfg[@]+"${ssh_cfg[@]}"} \
+    -o BatchMode=yes -o ConnectTimeout=10 "$remote" "sh -s -- /etc" 2>/dev/null || true)"
+fi
 if [ -z "$live_keys" ]; then
   # The comparison only ever reports what the live side has and the closure
   # lacks, so an empty live side passes everything -- silently, and in the one

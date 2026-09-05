@@ -102,7 +102,7 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
 ├── flake.nix
 ├── flake.lock
 ├── lib/
-│   └── default.nix                  ← mkDeployNodes, mkPreDeployApps
+│   └── default.nix                  ← mkDeployNodes, mkPreDeployApps, mkVmApps, mkLocalRunApps
 ├── hosts/
 │   ├── hardware/
 │   │   └── WSL.nix
@@ -123,8 +123,9 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
 │   ├── cache-guard.sh               ← binary caches on the machine that builds
 │   ├── deploy-gate.sh               ← the 8-step deploy gate
 │   ├── freshness-guard.sh           ← is this checkout behind its upstream
-│   ├── live-checks.sh               ← pre-deploy and verify, over ssh
+│   ├── live-checks.sh               ← pre-deploy and verify, over ssh or local
 │   ├── nixos-rebuild-migration.sh
+│   ├── rebuild-gate.sh              ← the same eight steps, on the machine itself
 │   └── run-local.sh                 ← the app stack as plain processes
 └── secrets/
     └── secrets.nix                  ← agenix recipients
@@ -369,17 +370,20 @@ Do **not** use it to recover a machine whose data already sits in the data direc
 
 ## 🔧 System rebuild
 
-The very first rebuild run
+The very first rebuild, before this flake has generated anything:
 
 ```bash
   sudo nixos-rebuild switch --flake .#<hostname>
 ```
 
-Example
+After that, prefer the gate. It is the **same** eight steps and the same four guards as a deploy, running against the machine you are on:
 
 ```bash
-  sudo nixos-rebuild switch --flake .#spartanWSL
+  sudo nix run .#rebuild-<hostname>                 # switch, the default
+  sudo nix run .#rebuild-<hostname> -- test         # activate without touching the boot entry
 ```
+
+Every host gets one, whether or not it declares a `deployment` — a machine you rebuild on is one you are standing at. `REBUILD_MIGRATE=1` adds the dump and restore, and the exit code of `nixos-rebuild` is **recorded, not obeyed**: a single failed unit does not mean the system did not change generation. See [the two gates and their guards](./docs/scripts/guards.md).
 
 ## 🐘 PostgreSQL migration (nixos-rebuild-migration)
 
@@ -455,7 +459,7 @@ Full documentation is available in the [`/docs/`](./docs/) directory:
 - [Web stack](./docs/modules/webstack.md)
 - [PostgreSQL](./docs/modules/postgresql.md)
 - [Deployment](./docs/modules/deployment.md)
-- [The deploy gate and its guards](./docs/scripts/guards.md)
+- [The two gates and their guards](./docs/scripts/guards.md)
 - [Running the apps locally](./docs/scripts/run-local.md)
 - [Migration scripts](./docs/scripts/)
 

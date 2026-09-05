@@ -170,6 +170,35 @@ in
               '';
             };
 
+          localNode = {
+            hostname = "localhost";
+            profiles.system.sshUser = "root";
+          };
+          localCheck = mode: liveCheck hostName localNode mode;
+
+          rebuildGate = pkgs.writeShellApplication {
+            name = "rebuild-${hostName}";
+            runtimeInputs = with pkgs; [
+              coreutils
+              glibc
+              gnugrep
+              nix
+              nixos-rebuild
+              util-linux
+            ];
+            text = ''
+              export GATE_FLAKE="''${GATE_FLAKE:-.}"
+              export GATE_HOST=${lib.escapeShellArg hostName}
+              export GATE_FRESH=${lib.getExe (freshnessGuard hostName)}
+              export GATE_CACHES=${lib.getExe (cacheGuard hostName)}
+              export GATE_PRE_DEPLOY=${lib.getExe (localCheck "pre-deploy")}
+              export GATE_ACCESS=${lib.getExe (accessGuard hostName localNode)}
+              export GATE_VERIFY=${lib.getExe (localCheck "verify")}
+
+              ${builtins.readFile ../scripts/rebuild-gate.sh}
+            '';
+          };
+
           checkApps = lib.concatMapAttrs (
             nodeName: node:
             lib.listToAttrs (
@@ -232,7 +261,17 @@ in
             }
           ) nodes;
         in
-        checkApps // accessApps // cacheApps // freshApps // lib.optionalAttrs (deployPkg != null) gateApps;
+        checkApps
+        // accessApps
+        // cacheApps
+        // freshApps
+        // {
+          "rebuild-${hostName}" = {
+            type = "app";
+            program = lib.getExe rebuildGate;
+          };
+        }
+        // lib.optionalAttrs (deployPkg != null) gateApps;
     in
     lib.foldl' (acc: h: acc // forHost h nixosConfigurations.${h}) { } (
       lib.attrNames nixosConfigurations

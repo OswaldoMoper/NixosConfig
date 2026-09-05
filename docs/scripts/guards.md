@@ -1,6 +1,13 @@
-# The deploy gate and its four guards
+# The two gates and their four guards
 
-`deploy-gate.sh` orchestrates; `freshness-guard.sh`, `cache-guard.sh`, `access-guard.sh` and `live-checks.sh` each answer one question. They are generated per node by `lib.mkPreDeployApps`, so a consuming flake gets `deploy-<node>` and the guards individually.
+`freshness-guard.sh`, `cache-guard.sh`, `access-guard.sh` and `live-checks.sh` each answer one question. Two scripts orchestrate them:
+
+| | Generated | For |
+| --- | --- | --- |
+| `deploy-gate.sh` | `deploy-<node>`, per deploy node | changing a machine from somewhere else |
+| `rebuild-gate.sh` | `rebuild-<host>`, per **host** | changing the machine you are on |
+
+`lib.mkPreDeployApps` generates both, plus each guard individually. The rebuild one is keyed by host rather than node on purpose: a machine you rebuild on is one you are standing at, which is exactly the case that has no deploy node.
 
 ## The gate — `deploy-gate.sh`
 
@@ -77,6 +84,45 @@ GATE_MIGRATE=1 nix run .#deploy-myNode
 ### `GATE_SKIP_PREFLIGHT=1`
 
 An explicit escape, because a gate without one gets bypassed by hand and stops being a gate. It exists for a known-intentional precondition mismatch. Whoever uses it next owes a reason.
+
+---
+
+## The rebuild gate — `rebuild-gate.sh`
+
+```bash
+sudo nix run .#rebuild-myHost                 # switch, the default
+sudo nix run .#rebuild-myHost -- test         # activate without touching the boot entry
+sudo nix run .#rebuild-myHost -- boot dry-run # any nixos-rebuild args follow the mode
+```
+
+The same eight steps and the same four guards. Seven of them apply unchanged; `REBUILD_MIGRATE=1` inserts the same `6b`/`7b` pair, reading and restoring locally.
+
+### Why it is a second gate and not a flag
+
+Measured against a local rebuild, the checks are not what differs. Three interactions are:
+
+**`nixos-rebuild` has modes a deploy cannot express.** `test` activates without writing the boot entry, which is what a rescue wants; `boot` stages without activating; `dry-activate` changes nothing. Step 8 has to mean something different for each, so it does: `dry-activate` verifies nothing, `boot` reports what it staged and stops, and only `switch` and `test` are held to running the closure that was built.
+
+**The cache guard can offer to write `~/.config/nix/nix.conf`.** On a laptop that is a convenience. On the machine being rebuilt it is a second change, made by a check.
+
+**Without `magicRollback` there is no revoke to misread** — but there is still an exit code to misread, and it is the same lesson. Measured 2026-08-29: `switch-to-configuration` exited 4 because **one** unit failed, the system **had** changed generation, and the old wrapper announced "migration cancelled" having cancelled nothing — before it had even compared PostgreSQL versions. Here the code is recorded, the machine is asked, and a mismatch between the two is reported as what it is.
+
+### It runs as root, and the dump does not
+
+`nixos-rebuild` needs root, so the gate is invoked with `sudo` and reaches postgres with `runuser`. The dump lands in **`$SUDO_USER`'s home**, not root's, because that is where whoever ran it will look — `~/postgres_backup_<host>.sql`, movable with `REBUILD_DUMP_LOCAL`.
+
+### The guards, locally
+
+`LIVE_LOCAL` and `ACCESS_LOCAL` are what the gate exports to get there, and they cost very little:
+
+| Guard | What changes |
+| --- | --- |
+| `cache-guard.sh` | **nothing**. It already reads `nix config show` and opens no connection |
+| `freshness-guard.sh` | **nothing**. It only ever asked git |
+| `live-checks.sh` | one function. Every remote question already went through `sshq`, and ssh joins its arguments into one shell command, so running that same command locally is the same command |
+| `access-guard.sh` | two places: the reachability probe, which has nothing to reach, and the lister, which runs against the same `/etc` either way |
+
+The access guard matters more here than it looks: activation rewrites `/etc` on the machine you are sitting at exactly as it does over a deploy, so an account that stops being declared loses its keys the same way.
 
 ---
 
