@@ -19,6 +19,8 @@ nix run .#deploy-myNode
 | 7 | deploy | exit code **recorded, not obeyed** |
 | 8 | verify the result | yes |
 
+With `GATE_MIGRATE=1` two more actions appear inside those eight, as `6b` and `7b`. See below.
+
 ### Three decisions that are easy to misread
 
 **Step 1 asks the remote, and only a failed fetch stops it.** Not a git checkout, or a branch with no upstream, are facts the operator chose and can see: they warn. A fetch that fails is different — it is "I could not ask whether this tree is stale", which is the state that lets a stale tree through believing it was checked. Same shape as the access guard's exit 2.
@@ -46,6 +48,31 @@ GATE_SSH_CONFIG=$HOME/.ssh/config nix run .#deploy-myNode
 Same fan-out for an ssh config file: the guards run their own `ssh`, so a path only deploy-rs knows about leaves them failing as if the host were unreachable. It becomes `-F <path>` for the guards and `--ssh-opts` for deploy-rs, added first so an explicit `--ssh-opts` from the caller still wins.
 
 It exists for CI. OpenSSH resolves `~/.ssh` from the account's home **in passwd** — `/var/empty` for a runner's system user — not from the job's `HOME`, so without it a runner's key is invisible to every guard.
+
+### `GATE_MIGRATE=1`
+
+For a deploy that **means** to change the PostgreSQL major. It inserts two actions into the same eight steps:
+
+| | |
+| --- | --- |
+| `6b/8` | read the live major, `pg_dumpall` on the remote, **download it**, and refuse to go on unless the file really looks like `pg_dumpall` output |
+| `7b/8` | read the major again; restore only if it **went up**, then remove the remote copy. The local one is kept either way |
+
+Three things about where those sit:
+
+**The dump goes after the last check and before the deploy.** Late enough that nothing else can abort once it exists, early enough that the machine is still serving the old cluster.
+
+**It comes off the box before the deploy.** A dump that only exists on the machine being changed is not a backup.
+
+**It is part of the gate, not a script beside it.** The separate path this replaces ran none of the six steps above — no cache guard, no access guard, no verify — and drifted from them, which is the argument against having two.
+
+Do **not** use it to recover a machine whose data already sits in the data directory the new config pins: the restore would write over a cluster that is already correct, and the dump would come from whichever cluster happens to be running.
+
+```bash
+GATE_MIGRATE=1 nix run .#deploy-myNode
+```
+
+`GATE_DUMP_DIR` (default `/var/tmp`) and `GATE_DUMP_LOCAL` (default `~/postgres_backup_<node>.sql`) move the two ends.
 
 ### `GATE_SKIP_PREFLIGHT=1`
 

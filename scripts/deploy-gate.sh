@@ -23,6 +23,26 @@ if [ -n "${GATE_SSH_CONFIG:-}" ]; then
   set -- --ssh-opts "-F $GATE_SSH_CONFIG" "$@"
 fi
 
+gate_ssh() {
+  ssh ${ssh_cfg[@]+"${ssh_cfg[@]}"} -o BatchMode=yes -o ConnectTimeout=10 \
+    "${GATE_HOST_USER}@${GATE_HOST_ADDR}" "$@"
+}
+
+# server_version_num is major*10000 + minor. psql --version reports the client's,
+# which is a different number and the original bug in the migration scripts.
+# Empty output rather than a number means the question could not be asked.
+remote_major() {
+  local num
+  num="$(gate_ssh "sudo -u postgres psql -tAc 'SHOW server_version_num'" 2>/dev/null | tr -d '[:space:]')"
+  case "$num" in
+    '' | *[!0-9]*) return 0 ;;
+    *) printf '%s' "$((num / 10000))" ;;
+  esac
+}
+
+GATE_DUMP_DIR="${GATE_DUMP_DIR:-/var/tmp}"
+GATE_DUMP_LOCAL="${GATE_DUMP_LOCAL:-${HOME}/postgres_backup_${GATE_NODE}.sql}"
+
 step "1/8 is this checkout current"
 # First because it is the cheapest and because every later step inherits its
 # answer: a stale tree's own checks are stale too.
@@ -88,6 +108,40 @@ if [ "$access_rc" -eq 2 ]; then
   exit 1
 fi
 
+# A major bump orphans the old data directory, so the dump goes between the
+# last check and the deploy: late enough that nothing else can abort after it,
+# early enough that the machine is still serving the old cluster.
+#
+# It lives here rather than in a script of its own because a parallel path ran
+# none of the six steps above, and drifted.
+migrate_before=""
+if [ "${GATE_MIGRATE:-0}" = "1" ]; then
+  step "6b/8 dump before migrating"
+  migrate_before="$(remote_major)"
+  if [ -z "$migrate_before" ]; then
+    printf 'could not read the remote postgres version; nothing was deployed\n' >&2
+    exit 1
+  fi
+  printf '  server_version_num before: %s\n' "$migrate_before"
+
+  gate_ssh "mkdir -p ${GATE_DUMP_DIR} && sudo -u postgres pg_dumpall > ${GATE_DUMP_DIR}/${GATE_NODE}.sql" || {
+    printf 'remote dump failed; nothing was deployed\n' >&2
+    exit 1
+  }
+  # Off the box before the deploy, because a dump that only exists on the
+  # machine being changed is not a backup.
+  scp ${ssh_cfg[@]+"${ssh_cfg[@]}"} -q \
+    "${GATE_HOST_USER}@${GATE_HOST_ADDR}:${GATE_DUMP_DIR}/${GATE_NODE}.sql" "$GATE_DUMP_LOCAL" || {
+    printf 'could not download the dump; nothing was deployed\n' >&2
+    exit 1
+  }
+  if ! grep -q 'PostgreSQL database dump' "$GATE_DUMP_LOCAL"; then
+    printf '%s does not look like pg_dumpall output; nothing was deployed\n' "$GATE_DUMP_LOCAL" >&2
+    exit 1
+  fi
+  printf '  dumped to %s (%s bytes)\n' "$GATE_DUMP_LOCAL" "$(wc -c < "$GATE_DUMP_LOCAL")"
+fi
+
 step "7/8 deploy"
 # The exit code is recorded, not obeyed. Measured on 2026-08-25: a per-user
 # activation warning for an account this deploy had just removed made deploy-rs
@@ -97,13 +151,34 @@ step "7/8 deploy"
 deploy_rc=0
 deploy "${GATE_FLAKE}#${GATE_NODE}" "$@" || deploy_rc=$?
 
+if [ "${GATE_MIGRATE:-0}" = "1" ]; then
+  step "7b/8 restore if the major moved"
+  migrate_after="$(remote_major)"
+  if [ -z "$migrate_after" ]; then
+    printf 'could not read the remote postgres version after the deploy\n' >&2
+    printf 'the dump is at %s; nothing was restored\n' "$GATE_DUMP_LOCAL" >&2
+    exit 1
+  fi
+  if [ "$migrate_after" -le "$migrate_before" ]; then
+    printf '  %s -> %s: unchanged or lower, nothing to restore\n' "$migrate_before" "$migrate_after"
+    gate_ssh "rm -f ${GATE_DUMP_DIR}/${GATE_NODE}.sql" || true
+  else
+    printf '  %s -> %s: restoring into the fresh cluster\n' "$migrate_before" "$migrate_after"
+    gate_ssh "cat ${GATE_DUMP_DIR}/${GATE_NODE}.sql | sudo -u postgres psql postgres" || {
+      printf 'restore failed. The dump is at %s\n' "$GATE_DUMP_LOCAL" >&2
+      exit 1
+    }
+    gate_ssh "rm -f ${GATE_DUMP_DIR}/${GATE_NODE}.sql" || true
+  fi
+  printf '  local copy kept at %s\n' "$GATE_DUMP_LOCAL"
+fi
+
 step "8/8 verify the result"
 # The machine is the authority. Two questions, in order: is it running the exact
 # closure we built, and does it work? The first is what tells a false alarm apart
 # from a real rollback -- verify alone cannot, because the previous generation
 # also has its units up.
-live="$(ssh ${ssh_cfg[@]+"${ssh_cfg[@]}"} -o BatchMode=yes -o ConnectTimeout=10 \
-  "${GATE_HOST_USER}@${GATE_HOST_ADDR}" readlink -f /run/current-system 2>/dev/null || true)"
+live="$(gate_ssh readlink -f /run/current-system 2>/dev/null || true)"
 
 if [ "$live" != "$built" ]; then
   printf '\nthe host is NOT running what we built\n' >&2
