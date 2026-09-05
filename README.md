@@ -13,7 +13,7 @@ A modular NixOS configuration supporting multiple users, applications, and hosts
 - [🖥️ Declaring hosts (multihost)](#️-declaring-hosts)
 - [🧩 Declaring apps (multiapp)](#-declaring-apps)
 - [🚀 Deployment](#-deploying-to-remote-servers-deploy-rs)
-- [🐘 Deployment + Migration](#-postgresql-migration-deploy-migration)
+- [🐘 Deployment + Migration](#-postgresql-migration-gate_migrate)
 - [🔧 System rebuild](#-system-rebuild)
 - [🐘 Rebuild + Migration](#-postgresql-migration-nixos-rebuild-migration)
 - [📚 Documentation](#-documentation)
@@ -122,7 +122,6 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
 │   ├── access-guard.sh              ← ssh logins a deploy would take away
 │   ├── cache-guard.sh               ← binary caches on the machine that builds
 │   ├── deploy-gate.sh               ← the 8-step deploy gate
-│   ├── deploy-migration.sh
 │   ├── freshness-guard.sh           ← is this checkout behind its upstream
 │   ├── live-checks.sh               ← pre-deploy and verify, over ssh
 │   ├── nixos-rebuild-migration.sh
@@ -353,59 +352,20 @@ Step 1 is first because it is cheap and because every later step inherits its an
 
 `GATE_SSH_CONFIG=<path>` does the same for an ssh config file, reaching the guards and `deploy --ssh-opts` alike. It exists because OpenSSH resolves `~/.ssh` from the account's home in passwd — `/var/empty` for a CI runner's system user — not from the job's `HOME`.
 
-## 🐘 PostgreSQL migration (deploy-migration)
+## 🐘 PostgreSQL migration (GATE_MIGRATE)
 
-This flake includes a helper script that performs safe PostgreSQL migrations during deploys.
-
-### What the script does
-
-- connects to the remote server
-- creates a full PostgreSQL backup
-- downloads the backup locally
-- runs `deploy-rs`
-- detects if PostgreSQL version changed
-- restores the database if needed
-
-### Running a migration deploy
+A deploy that **means** to change the PostgreSQL major runs through the same gate, with two extra actions:
 
 ```bash
-nix run .#deploy-migration -- myServer
+GATE_MIGRATE=1 nix run .#deploy-myNode
 ```
 
-or
+- `6b/8` — read the live major, dump the remote cluster, **download it**, and refuse to continue unless the file really is `pg_dumpall` output
+- `7b/8` — read the major again, and restore only if it went **up**
 
-```bash
-deploy-migration -- myServer
-```
+There is deliberately no separate command. A path beside the gate runs none of its checks, and drifts from them — see [the gate and its guards](./docs/scripts/guards.md).
 
-### Installing deploy-migration on a host
-
-`deploy-migration` is optional. Only hosts that perform remote deployments need it.
-
-To enable it on a specific host:
-
-```nix
-{pkgs,...}: {
-  # ... other host configurations ...
-  deployment.myServer = {
-    hostname = "0.0.0.0";
-    profiles.system = {
-      sshUser = "example";
-      path = deploy-rs.lib.activate.nixos self.nixosConfigurations.myServer;
-      user = "root"
-    };
-  };
-  environment.systemPackages = [
-    # ... other systemPackages ...
-    inputs.deploy-rs.defaultPackage.${pkgs.system}
-    self.packages.${pkgs.system}.deploy-migration
-    # ... other systemPackages ...
-  ];
-  # ... other host configurations ...
-}
-```
-
-This keeps deployment tooling out of machines that don't need it (e.g. laptops, WSL, development hosts).
+Do **not** use it to recover a machine whose data already sits in the data directory the new config pins: the restore would overwrite a cluster that is already correct.
 
 ## 🔧 System rebuild
 
