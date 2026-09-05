@@ -149,6 +149,7 @@ in
               name = "deploy-${nodeName}";
               runtimeInputs = [
                 pkgs.coreutils
+                pkgs.gnugrep
                 pkgs.nix
                 pkgs.openssh
                 deployPkg

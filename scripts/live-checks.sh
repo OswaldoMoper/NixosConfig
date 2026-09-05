@@ -77,7 +77,7 @@ if [ "$mode" = "pre-deploy" ] && [ -n "${LIVE_PG_MAJOR:-}" ]; then
       if [ "$target" = "$LIVE_PG_MAJOR" ]; then
         bad "postgres major is ${live} but the config pins ${LIVE_PG_MAJOR}, and ${LIVE_DATA_DIR} already holds a version ${target} cluster: deploying switches to that one and orphans whatever the live ${live} cluster holds"
       else
-        bad "postgres major is ${live} but the config pins ${LIVE_PG_MAJOR}, and ${LIVE_DATA_DIR} holds no cluster: deploying would start an empty one. Use deploy-migration, which dumps first"
+        bad "postgres major is ${live} but the config pins ${LIVE_PG_MAJOR}, and ${LIVE_DATA_DIR} holds no cluster: deploying would start an empty one. Re-run with GATE_MIGRATE=1, which dumps first"
       fi
     fi
   fi
