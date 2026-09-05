@@ -177,7 +177,7 @@ Use it when:
 
 Do **not** use it for:
 
-- Remote deploys (use `deploy-migration.sh` instead)
+- Remote deploys (use `GATE_MIGRATE=1` with the deploy gate instead)
 - Hosts without PostgreSQL installed
 
 ## Example

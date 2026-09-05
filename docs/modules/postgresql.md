@@ -269,20 +269,16 @@ settings.log_statement
 }
 ```
 
-## Relationship with migration scripts
+## Relationship with the migration paths
 
-The migration scripts:
+Two things migrate a major, and both depend on this module to know which one is pinned:
 
-- `deploy-migration.sh`
-- `nixos-rebuild-migration.sh`
+| | |
+| --- | --- |
+| `GATE_MIGRATE=1` with the [deploy gate](../scripts/guards.md) | a remote deploy that means to change the major |
+| [`nixos-rebuild-migration`](../scripts/nixos-rebuild-migration.md) | the same, rebuilding on the machine itself |
 
-depend on this module because they:
-
-- detect PostgreSQL version changes
-- create backups
-- restore dumps
-
-This module ensures that PostgreSQL is configured consistently across hosts.
+Both detect the version change, back up before it and restore after. What they read from here is `postgresql.package`, which is why it is pinned per host and asserted against what the machine really runs — a shared pin would point one host at a stale data directory.
 
 ## When to use this module
 

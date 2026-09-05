@@ -149,16 +149,15 @@ This means:
 }
 ```
 
-## Relationship with migration scripts
+## Relationship with the deploy gate
 
-The `deploy-migration.sh` script relies on this module:
+The gate that [`lib.mkPreDeployApps`](../scripts/guards.md) generates relies on this module:
 
-- It reads `deploy.nodes.<node>.hostname`
-- It reads `deploy.nodes.<node>.profiles.system.sshUser`
-- It reads the activation path
-- This module is therefore required for:
-- deploy-migration
-- remote PostgreSQL-safe deployments
+- it reads `deploy.nodes.<node>.hostname`
+- it reads `deploy.nodes.<node>.profiles.system.sshUser`
+- it reads the activation path
+
+So this module is what makes both a plain deploy and a `GATE_MIGRATE=1` one — the PostgreSQL-safe kind — possible at all.
 
 ## When to use this module
 

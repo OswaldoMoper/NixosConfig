@@ -191,7 +191,6 @@ in {
   environment.systemPackages = [
     # ... other pkgs
     inputs.deploy-rs.defaultPackage.${pkgs.system}
-    self.packages.${pkgs.system}.deploy-migration
     self.packages.${pkgs.system}.nixos-rebuild-migration
   ];
 
@@ -381,7 +380,6 @@ Servers typically enable:
   };
   environment.systemPackages = [
     inputs.deploy-rs.defaultPackage.${pkgs.system}
-    self.packages.${pkgs.system}.deploy-migration
     self.packages.${pkgs.system}.nixos-rebuild-migration
   ];
 }

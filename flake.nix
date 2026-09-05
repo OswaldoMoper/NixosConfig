@@ -71,16 +71,6 @@
         runtimeInputs = common ++ [ pkgs.nixos-rebuild ];
         text = builtins.readFile ./scripts/nixos-rebuild-migration.sh;
       };
-      deploy-migration = pkgs.writeShellApplication {
-        name = "deploy-migration";
-        excludeShellChecks = [ "SC2029" ];
-        runtimeInputs = common ++ [
-          pkgs.nix
-          pkgs.openssh
-          deploy-rs.packages.${system}.default
-        ];
-        text = builtins.readFile ./scripts/deploy-migration.sh;
-      };
     };
   in {
     inherit nixosConfigurations;
