@@ -203,6 +203,40 @@ in
       });
     };
 
+    renames = mkOption {
+      default = [ ];
+      example = [ { from = "myapp"; to = "myapp_db"; } ];
+      description = ''
+        Databases to rename before anything else touches them.
+
+        The one thing `ensure` cannot express: it is additive, so pointing it at
+        a new name creates an empty database beside the old one rather than
+        moving it. This runs first, so by the time the rest of the setup looks,
+        only the new name is there.
+
+        Four states, and only one is work: the old name alone gets renamed, the
+        new name alone is already done, neither is nothing, and **both existing
+        stops the activation** -- which one holds the data is not a question
+        this can answer.
+
+        Databases only. A role's md5 password is salted with its own name, so
+        renaming one invalidates it; scram survives, but the two cannot be told
+        apart from here.
+      '';
+      type = types.listOf (types.submodule {
+        options = {
+          from = mkOption {
+            type = types.str;
+            description = "Database name as it is on disk today.";
+          };
+          to = mkOption {
+            type = types.str;
+            description = "Name it should have.";
+          };
+        };
+      });
+    };
+
     logStatements = mkOption {
       type = types.enum [ "all" "mod" "none" ];
       default = "none";
@@ -239,6 +273,22 @@ in
           let names = map (e: e.database) entries;
           in lib.length (lib.unique names) == lib.length names;
         message = "postgresql.ensure: two entries name the same database, so they would fight over its owner";
+      }
+      {
+        assertion = lib.all (r: r.from != r.to) cfg.renames;
+        message = "postgresql.renames: a rename needs two different names";
+      }
+      {
+        assertion =
+          let
+            names = map (r: r.from) cfg.renames ++ map (r: r.to) cfg.renames;
+          in
+          lib.length (lib.unique names) == lib.length names;
+        message = "postgresql.renames: a database appears twice, so the order would decide the result";
+      }
+      {
+        assertion = lib.all (r: !lib.elem r.from config.services.postgresql.ensureDatabases) cfg.renames;
+        message = "postgresql.renames: a database being renamed away is still declared, so it would be created again empty";
       }
       {
         assertion = lib.all (r: (r.type == "local") == (r.address == null)) cfg.authRules;
@@ -290,6 +340,30 @@ in
           ''
         else
           null;
+    };
+
+    # before AND requiredBy: before alone only orders two units that are already
+    # in the same transaction, and setup starting without this one is exactly
+    # the case that matters -- ensureDatabases would create the new name empty,
+    # the rename would find no source, and the app would connect to nothing.
+    systemd.services.postgresql-rename = mkIf (cfg.renames != [ ]) {
+      description = "Rename the databases postgresql.renames declares";
+      after = [ "postgresql.service" ];
+      requires = [ "postgresql.service" ];
+      before = [ "postgresql-setup.service" ];
+      requiredBy = [ "postgresql-setup.service" ];
+      path = [ cfg.package pkgs.util-linux pkgs.coreutils ];
+      serviceConfig = {
+        Type = "oneshot";
+        RemainAfterExit = true;
+      };
+      script = ''
+        export RENAME_PAIRS=${
+          lib.escapeShellArg (lib.concatMapStringsSep " " (r: "${r.from}=${r.to}") cfg.renames)
+        }
+
+        ${builtins.readFile ../scripts/postgresql-rename.sh}
+      '';
     };
 
     systemd.services.postgresql-ensure = mkIf (entries != [ ]) {
