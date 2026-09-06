@@ -137,12 +137,14 @@ Use it when:
 
 Do not use it for:
 
-- Headless servers
 - Containers
-- Remote-only machines
+- Machines that want no desktop at all
 
-There is no exception. A headless host that wants VS Code Remote-SSH needs
-`programs.nix-ld.enable` — set it directly, because this module's whole `config` block is behind `mkIf graphical.enable` and a headless host does not enable it. For a `code` command usable from an ordinary ssh session, see `nixosModules/vscode.nix`.
+**A headless server is the exception**, and the only one: `graphical.nixLd.enable` lives outside `mkIf graphical.enable`, so a host with `graphical.enable = false` can still turn nix-ld on — which is what VS Code Remote-SSH needs, and nothing else here comes with it.
+
+It only ever turns nix-ld **on**. An enable-shaped option that also asserted `false` would collide with any other module that wanted it, and the host would stop evaluating.
+
+For a `code` command usable from an ordinary ssh session, see [`vscode.nix`](./vscode.md).
 
 ## Notes
 

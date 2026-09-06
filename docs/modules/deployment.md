@@ -55,11 +55,11 @@ Defaults to `false`.
 
 ### `deployment.<node>.profiles.<name>.sshUser`
 
-User used for SSH connection.
+User used for SSH connection. Defaults to `"admin"`, which is a name most machines do not have — a node that never sets it fails to connect as somebody who does not exist, and that looks exactly like an unreachable host.
 
 ### `deployment.<node>.profiles.<name>.user`
 
-User used for activation on the remote machine.
+User used for activation on the remote machine. Defaults to `"root"`.
 
 ### `deployment.<node>.profiles.<name>.path`
 
