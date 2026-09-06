@@ -96,6 +96,8 @@ Because `ensure` is additive, pointing it at a new name creates an **empty datab
 
 The last row is the point: which of the two holds the data is not a question this can answer, and picking wrong loses it. It stops and says so.
 
+Stopping mid-activation is a bad place to learn it, so the [pre-deploy checks](../scripts/guards.md) ask the same question **before** the deploy starts, and refuse it there.
+
 ### Databases only
 
 A role's `md5` password is **salted with the role name**, so renaming a role invalidates it; `scram-sha-256` uses a random salt and survives. The two cannot be told apart from here, so roles are out of scope — rename one by hand and set its password again.
