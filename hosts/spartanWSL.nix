@@ -146,7 +146,6 @@ in
       oh-my-zsh
       cloudflared
       sops
-      self.packages.x86_64-linux.nixos-rebuild-migration
       inputs.agenix.packages.${pkgs.stdenv.hostPlatform.system}.default
       inputs.deploy-rs.packages.${pkgs.stdenv.hostPlatform.system}.default
     ];

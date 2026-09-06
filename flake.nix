@@ -60,16 +60,6 @@
         name = builtins.replaceStrings [".nix"] [""] file;
         value = mkHost (builtins.replaceStrings [".nix"] [""] file);
       }) hostFiles);
-    myPackages = let
-      pkgs = nixpkgs.legacyPackages.${system};
-      common = with pkgs; [ coreutils gnugrep gawk util-linux systemd ];
-    in {
-      nixos-rebuild-migration = pkgs.writeShellApplication {
-        name = "nixos-rebuild-migration";
-        runtimeInputs = common ++ [ pkgs.nixos-rebuild ];
-        text = builtins.readFile ./scripts/nixos-rebuild-migration.sh;
-      };
-    };
   in {
     inherit nixosConfigurations;
     lib = myLib;
@@ -87,8 +77,7 @@
         inherit nixosConfigurations;
         pkgs = nixpkgs.legacyPackages.${system};
       };
-    packages.${system} = myPackages;
-    checks.${system} = myPackages // {
+    checks.${system} = {
       hosts =
         (nixpkgs.legacyPackages.${system}).writeText "host-toplevels"
           (lib.concatMapStringsSep "\n"

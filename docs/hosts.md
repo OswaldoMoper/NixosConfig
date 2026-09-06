@@ -191,7 +191,6 @@ in {
   environment.systemPackages = [
     # ... other pkgs
     inputs.deploy-rs.defaultPackage.${pkgs.system}
-    self.packages.${pkgs.system}.nixos-rebuild-migration
   ];
 
   # Optional
@@ -304,7 +303,6 @@ Servers typically enable:
   };
   networking.firewall.allowedTCPPorts = [ 22 80 5432 ];
   environment.systemPackages = [
-    self.packages.${pkgs.system}.nixos-rebuild-migration
   ];
 }
 ```
@@ -380,7 +378,6 @@ Servers typically enable:
   };
   environment.systemPackages = [
     inputs.deploy-rs.defaultPackage.${pkgs.system}
-    self.packages.${pkgs.system}.nixos-rebuild-migration
   ];
 }
 ```
