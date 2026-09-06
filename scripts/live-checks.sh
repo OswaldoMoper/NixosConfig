@@ -101,6 +101,35 @@ if [ "$mode" = "pre-deploy" ] && [ -n "${LIVE_PG_MAJOR:-}" ]; then
   fi
 fi
 
+# Both names existing is the one state postgresql.renames refuses to resolve,
+# and it refuses it halfway through an activation. Asking here costs two
+# queries and moves that discovery to before anything has been touched.
+if [ "$mode" = "pre-deploy" ] && [ -n "${LIVE_RENAMES:-}" ]; then
+  read -ra renames <<<"$LIVE_RENAMES"
+  # A server that is not answering says "no such database" to everything, which
+  # here would read as "nothing to rename" -- the one answer that needs no
+  # attention. Establish it is answering before believing any of them.
+  if [ "$(psql_value "'SELECT 1'")" != "1" ]; then
+    bad "postgres is not answering, so nothing here can say which databases the rename would find"
+  else
+    for pair in "${renames[@]}"; do
+      from="${pair%%=*}"
+      to="${pair#*=}"
+      has_from="$(psql_value "\"SELECT 1 FROM pg_database WHERE datname='${from}'\"")"
+      has_to="$(psql_value "\"SELECT 1 FROM pg_database WHERE datname='${to}'\"")"
+      if [ "$has_from" = "1" ] && [ "$has_to" = "1" ]; then
+        bad "both ${from} and ${to} exist, so the rename cannot tell which holds the data: settle it by hand before deploying"
+      elif [ "$has_from" = "1" ]; then
+        ok "${from} is there and will be renamed to ${to}"
+      elif [ "$has_to" = "1" ]; then
+        ok "${to} is already renamed"
+      else
+        warn "neither ${from} nor ${to} exists, so the rename will do nothing and ${to} will be created empty"
+      fi
+    done
+  fi
+fi
+
 # Postconditions: only true once a deploy has succeeded, so asserting them
 # before one would block the very deploy meant to create them.
 if [ "$mode" = "verify" ]; then

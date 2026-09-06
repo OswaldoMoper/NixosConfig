@@ -49,6 +49,9 @@ in
             ++ lib.optionals pg.enable pg.ensureDatabases
           );
           owners = map (e: "${e.database}=${e.role}") (lib.filter (e: e.owner) ensure);
+          renames = map (r: "${r.from}=${r.to}") (
+            lib.optionals (cfg ? postgresql && cfg.postgresql.enable) cfg.postgresql.renames
+          );
           pg = cfg.services.postgresql;
 
           liveCheck =
@@ -80,6 +83,7 @@ in
                 export LIVE_UNITS=${lib.escapeShellArg (lib.concatStringsSep " " units)}
                 export LIVE_DATABASES=${lib.escapeShellArg (lib.concatStringsSep " " databases)}
                 export LIVE_DB_OWNERS=${lib.escapeShellArg (lib.concatStringsSep " " owners)}
+                export LIVE_RENAMES=${lib.escapeShellArg (lib.concatStringsSep " " renames)}
 
                 ${builtins.readFile ../scripts/live-checks.sh}
               '';

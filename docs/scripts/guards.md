@@ -163,6 +163,7 @@ Two modes over one script.
 
 - reachable over ssh
 - **on a host that declares a database**, the PostgreSQL major matches the pin — and *which way* a mismatch hurts (a data dir already holding another major is a different problem from an empty one) — and the data dir exists
+- **on a host that declares [`postgresql.renames`](../modules/postgresql.md)**, that no pair has *both* names on disk. That is the one state the rename refuses to resolve, and it refuses it halfway through an activation; two queries here move the discovery to before anything has been touched. A pair with neither name **warns without failing**: nothing will be renamed and the new name will be created empty, which is right on a fresh machine and wrong everywhere else
 
 The database half is conditional on purpose. A host whose whole job is to run a CI runner has no
 Postgres at all, so asserting a major there would make it undeployable.
