@@ -341,9 +341,33 @@ in
           }
           {
             assertion =
-              builtins.length (lib.unique (map (a: a.name) allApps)) 
+              builtins.length (lib.unique (map (a: a.name) allApps))
               == builtins.length allApps;
             message = "webStack: Each app must have a unique name.";
+          }
+          {
+            assertion =
+              let
+                pairs = v: map (l: "${l.addr}:${toString l.port}") v.listen;
+              in
+              lib.all (
+                v: builtins.length (lib.unique (pairs v)) == builtins.length (pairs v)
+              ) (lib.attrValues config.services.nginx.virtualHosts);
+            message =
+              let
+                dup = lib.filterAttrs (
+                  _: v:
+                  let
+                    p = map (l: "${l.addr}:${toString l.port}") v.listen;
+                  in
+                  builtins.length (lib.unique p) != builtins.length p
+                ) config.services.nginx.virtualHosts;
+              in
+              ''
+                webStack: ${lib.concatStringsSep ", " (lib.attrNames dup)} listens on the same
+                address twice. A kind = "profile" app whose module already serves TLS does not
+                need tls = true here as well; that option is for one that does not.
+              '';
           }
         ];
 
