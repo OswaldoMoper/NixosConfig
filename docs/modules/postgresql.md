@@ -75,6 +75,47 @@ That unit is deliberately its own, rather than a `postgresql-setup.postStart` fr
 - two entries cannot name the same database, or they would fight over its owner
 - a database already declared by another module in `ensureDatabases` is refused
 
+## `postgresql.renames` — the one thing `ensure` cannot express
+
+Because `ensure` is additive, pointing it at a new name creates an **empty database beside the old one** instead of moving it. This renames first, so by the time anything else looks, only the new name is there.
+
+```nix
+{
+  postgresql.renames = [ { from = "myapp"; to = "myapp_db"; } ];
+}
+```
+
+### Four states, and only one is work
+
+| On disk | What happens |
+| --- | --- |
+| only `from` | renamed |
+| only `to` | already renamed, nothing to do |
+| neither | nothing to do |
+| **both** | **the activation stops** |
+
+The last row is the point: which of the two holds the data is not a question this can answer, and picking wrong loses it. It stops and says so.
+
+### Databases only
+
+A role's `md5` password is **salted with the role name**, so renaming a role invalidates it; `scram-sha-256` uses a random salt and survives. The two cannot be told apart from here, so roles are out of scope — rename one by hand and set its password again.
+
+### Where it runs
+
+`postgresql-rename.service`, ordered `before` **and** `requiredBy` `postgresql-setup.service`. Both are needed: `before` alone only orders two units that are already in the same transaction, and setup starting without this one is exactly the case that matters — `ensureDatabases` would create the new name empty, the rename would then find no source, and the app would connect to nothing.
+
+### If it dies mid-rename
+
+It closes the database to new connections (`ALLOW_CONNECTIONS false`) before renaming, and `datallowconn` **survives the rename with no superuser bypass** — so a script killed in between would leave the database unreachable by anyone. A trap on `EXIT`, `INT` and `TERM` reopens whichever name is on disk when it leaves. Measured: killed with the door shut, the database comes back connectable.
+
+`pg_terminate_backend` only asks, so the rename is retried for 5 s before giving up rather than failing on a backend that was about to go away.
+
+### Assertions on the pairs
+
+- `from` and `to` must differ
+- no database may appear twice across all the pairs, or the order would decide the result
+- `from` must not still be in `services.postgresql.ensureDatabases` — it would be renamed away and then recreated empty, which reads as the rename having silently failed
+
 ## Initial Setup
 
 > The single-pair form of `ensure`, kept for compatibility and **stricter**: it requires a password file where `ensure` allows none. The module emits a warning when it is used.
