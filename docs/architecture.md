@@ -14,7 +14,7 @@ Currently optimized for `x86_64-linux`.
 
 **Hosts are auto-detected.** The flake reads every `.nix` file in `hosts/` and generates `nixosConfigurations.<host>`, plus `deploy.nodes` where a `deployment` is declared. Adding a machine needs zero changes to `flake.nix`.
 
-**Modules are listed twice.** The `nixosModules` *output* is a directory sweep, so a new file there is exported to consumers automatically. But the list applied to this repo's own hosts is written out by hand. A module can therefore be shipped and never evaluated here — which has happened.
+**Modules are listed twice.** The `nixosModules` *output* is a directory sweep, so a new file there is exported to consumers automatically. But the list applied to this repo's own hosts is written out by hand. A module can therefore be shipped and never evaluated here — which has happened. The two agree today; nothing enforces that they keep agreeing.
 
 Both sweeps filter on `.nix`. The module one must, because anything else in that directory would be `import`ed as a module and break **the consuming flake**, not this one.
 
@@ -30,9 +30,20 @@ Both sweeps filter on `.nix`. The module one must, because anything else in that
 
 Deploys **build where you run them** and only copy the closure, so the servers never compile the apps. That is why binary caches are declared on the host that builds rather than in `common.nix`.
 
-## What this repo cannot check about itself
+## What `nix flake check` here does and does not see
 
-`nix flake check` here runs shellcheck over `scripts/` and nothing else. `lib/default.nix` is exercised only by the consuming flake: `deployPkg` is never passed, so the gate is unreachable, and the single local host declares no `deployment`, so `deploy.nodes` is empty.
+Two checks:
+
+| | |
+| --- | --- |
+| `checks.hosts` | forces `system.build.toplevel.drvPath` for **every** host in `hosts/`. That is an *evaluation*, not a build: assertions fire, option types are enforced, and a module that no longer evaluates fails here rather than in the consuming flake after a push |
+| `checks.scripts` | shellcheck over all of `scripts/` |
+
+`hosts` discards the string context on purpose, so nothing is built. A package that fails to compile is still invisible here.
+
+**And one host is not a fleet.** The check only sees conflicts this repo's own configuration can produce, which is the narrow case. A module that unconditionally asserts `programs.nix-ld.enable = false` evaluates perfectly here — there is nothing to disagree with it — and breaks every consumer whose own module says `true`. Measured, and the reason an enable-shaped option may only ever turn something on.
+
+`lib/default.nix` is also only half exercised: `deployPkg` is never passed and the single local host declares no `deployment`, so `deploy.nodes` is empty and the **deploy** gate is unreachable from here. The **rebuild** gate is not — every host gets one, so `rebuild-spartanWSL` is built and shellchecked.
 
 Worth knowing before trusting a green check on a change to `lib/` or a module.
 
@@ -42,7 +53,7 @@ Worth knowing before trusting a green check on a change to `lib/` or a module.
 | --- | --- |
 | `nixosModules/` | the product: options other flakes consume |
 | `lib/` | `mkDeployNodes`, `mkPreDeployApps`, `mkVmApps`, `mkLocalRunApps` |
-| `scripts/` | the gate, its guards, the migration helpers |
+| `scripts/` | the two gates, their four guards, and the database rename |
 | `hosts/` | this repo's own machines — currently one |
 | `hmProfiles/` | per-user Home Manager profiles; searched via `hmProfiles.dirs`, and a consumer's own directory wins |
 

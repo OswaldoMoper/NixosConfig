@@ -123,6 +123,7 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
 │   ├── deploy-gate.sh               ← the 8-step deploy gate
 │   ├── freshness-guard.sh           ← is this checkout behind its upstream
 │   ├── live-checks.sh               ← pre-deploy and verify, over ssh or local
+│   ├── postgresql-rename.sh         ← move a database before setup creates it empty
 │   ├── rebuild-gate.sh              ← the same eight steps, on the machine itself
 │   └── run-local.sh                 ← the app stack as plain processes
 └── docs/
@@ -338,7 +339,7 @@ Eight steps, in this order:
 | 1 | is this checkout missing commits the remote has, and is the tree dirty | findings only warn; **exit 2 blocks**, and means the remote could not be asked |
 | 2 | binary caches on the machine that will **build** | only if a human answers "abort" |
 | 3 | `nix flake check` — pure checks | yes |
-| 4 | live preconditions: reachable, Postgres major, data dir | yes |
+| 4 | live preconditions: reachable, Postgres major, data dir, and no ambiguous rename waiting | yes |
 | 5 | build the toplevel locally | yes |
 | 6 | ssh access this deploy would remove | a finding only warns; **exit 2 blocks**, and means the guard never looked |
 | 7 | deploy | its exit code is **recorded, not obeyed** |
