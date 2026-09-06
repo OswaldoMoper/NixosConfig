@@ -45,4 +45,5 @@ Worth knowing before trusting a green check on a change to `lib/` or a module.
 | `scripts/` | the gate, its guards, the migration helpers |
 | `hosts/` | this repo's own machines — currently one |
 | `hmProfiles/` | per-user Home Manager profiles; searched via `hmProfiles.dirs`, and a consumer's own directory wins |
-| `secrets/` | agenix recipients |
+
+Secrets are deliberately absent. The agenix module reaches every host, but the recipients and the `.age` files live in the flake that declares the real machines: this one declares an example, and an example has no secrets to keep.

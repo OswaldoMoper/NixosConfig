@@ -127,9 +127,10 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
 │   ├── nixos-rebuild-migration.sh
 │   ├── rebuild-gate.sh              ← the same eight steps, on the machine itself
 │   └── run-local.sh                 ← the app stack as plain processes
-└── secrets/
-    └── secrets.nix                  ← agenix recipients
+└── docs/
 ```
+
+Secrets are **not** kept here. The agenix module is applied to every host, but the recipients and the `.age` files belong to the flake that declares the real machines — this one declares an example.
 
 ## 👤 Declaring users
 
