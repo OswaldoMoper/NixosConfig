@@ -98,6 +98,25 @@ The last row is the point: which of the two holds the data is not a question thi
 
 Stopping mid-activation is a bad place to learn it, so the [pre-deploy checks](../scripts/guards.md) ask the same question **before** the deploy starts, and refuse it there.
 
+### It observes; it never creates the old name
+
+`ensure` declares the **new** name and nothing else — an assertion refuses the old one, because `postgresql-setup` would recreate it empty on the next activation, beside the renamed database.
+
+So the chain is `postgresql` → `postgresql-rename` → `postgresql-setup` → `postgresql-ensure`. By the time `ensureDatabases` looks, the database already has its new name and there is nothing to create.
+
+### Leave the entry in place
+
+A rename that has already happened costs nothing to declare: the pair reads *already renamed* and does no work. Removing it is what is risky, and only in one direction.
+
+| When the entry is removed | What happens |
+| --- | --- |
+| after every machine has been through it | nothing. The new name exists and `ensure` declares it |
+| **before some machine has** | that machine still holds the old name, and `ensure` **creates the new one empty** beside it |
+
+The second row does not lose data — this DSL never drops anything, so the old database is still there with its rows — but the app connects to an empty one. The pre-deploy check cannot see it, because there is no longer an entry to ask about; **the `verify` step catches it**, as `database <name> exists but public is empty`. Recovery is to put the entry back and deploy again.
+
+So: **keep the pair declared until every machine has activated with it.**
+
 ### Databases only
 
 A role's `md5` password is **salted with the role name**, so renaming a role invalidates it; `scram-sha-256` uses a random salt and survives. The two cannot be told apart from here, so roles are out of scope — rename one by hand and set its password again.
