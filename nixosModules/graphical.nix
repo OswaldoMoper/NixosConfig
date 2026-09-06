@@ -29,13 +29,24 @@ in
       default = [];
       description = "Fonts to install";
     };
-    vscode.enable = mkOption {
+    nixLd.enable = mkOption {
       type = types.bool;
       default = config.graphical.mode == "WSL";
-      description = "Enable VScode Remote integration";
+      description = ''
+        Run unpatched dynamically linked binaries, which is what a remote
+        editor's server is. Defaults on under WSL, where one usually follows.
+
+        Deliberately outside the rest of this module's config: a headless host
+        is exactly where a remote editor matters, and it is the one host that
+        never enables a graphical environment.
+      '';
     };
   };
-  config = mkIf cfg.enable {
+
+  config = lib.mkMerge [
+    { programs.nix-ld.enable = cfg.nixLd.enable; }
+
+    (mkIf cfg.enable {
     services = {
       xserver = {
         enable = isGraphical;
@@ -53,7 +64,6 @@ in
       };
       desktopManager.plasma6.enable = isGraphical;
     };
-    programs.nix-ld.enable = cfg.vscode.enable;
     fonts.packages = mkIf isGraphical (map (f: pkgs.${f}) cfg.fonts);
     services.pipewire = {
       enable = isGraphical;
@@ -61,5 +71,6 @@ in
       pulse.enable = isGraphical;
       jack.enable = isGraphical;
     };
-  };
+    })
+  ];
 }
