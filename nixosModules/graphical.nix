@@ -44,7 +44,7 @@ in
   };
 
   config = lib.mkMerge [
-    { programs.nix-ld.enable = cfg.nixLd.enable; }
+    (mkIf cfg.nixLd.enable { programs.nix-ld.enable = true; })
 
     (mkIf cfg.enable {
     services = {
