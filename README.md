@@ -15,7 +15,6 @@ A modular NixOS configuration supporting multiple users, applications, and hosts
 - [🚀 Deployment](#-deploying-to-remote-servers-deploy-rs)
 - [🐘 Deployment + Migration](#-postgresql-migration-gate_migrate)
 - [🔧 System rebuild](#-system-rebuild)
-- [🐘 Rebuild + Migration](#-postgresql-migration-nixos-rebuild-migration)
 - [📚 Documentation](#-documentation)
 - [🧠 Notes](#-notes)
 - [⚖️ License](#️-license)
@@ -124,7 +123,6 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
 │   ├── deploy-gate.sh               ← the 8-step deploy gate
 │   ├── freshness-guard.sh           ← is this checkout behind its upstream
 │   ├── live-checks.sh               ← pre-deploy and verify, over ssh or local
-│   ├── nixos-rebuild-migration.sh
 │   ├── rebuild-gate.sh              ← the same eight steps, on the machine itself
 │   └── run-local.sh                 ← the app stack as plain processes
 └── docs/
@@ -386,65 +384,6 @@ After that, prefer the gate. It is the **same** eight steps and the same four gu
 
 Every host gets one, whether or not it declares a `deployment` — a machine you rebuild on is one you are standing at. `REBUILD_MIGRATE=1` adds the dump and restore, and the exit code of `nixos-rebuild` is **recorded, not obeyed**: a single failed unit does not mean the system did not change generation. See [the two gates and their guards](./docs/scripts/guards.md).
 
-## 🐘 PostgreSQL migration (nixos-rebuild-migration)
-
-This repository includes a local helper tool that extends `nixos-rebuild` with automatic PostgreSQL backup and restore logic.
-
-Use this tool when rebuilding local machines (laptops, desktops, WSL, development servers).
-
-### What the tool does
-
-- creates a full PostgreSQL backup before rebuilding
-- runs `nixos-rebuild`
-- detects if the PostgreSQL version changed
-- restores the databases if needed
-
-This ensures safe upgrades when switching between NixOS generations that includes PostgreSQL version bumps.
-
-### Running a migration rebuild
-
-```bash
-  sudo nixos-rebuild-migration switch --flake .#<hostname>
-```
-
-Example:
-
-```bash
-  sudo nixos-rebuild-migration switch --flake .#spartanWSL
-```
-
-### When to use this tool
-
-Use `nixos-rebuild-migration` instead of `nixos-rebuild` when:
-
-- your host uses PostgreSQL module
-- you are updating NixOS to a new release
-- you suspect PostgreSQL might upgrade
-- you want safe, automatic backup/restore behavior
-
-For normal rebuild without PostgreSQL changes, it behaves exactly like `nixos-rebuild`.
-
-### Installing nixos-rebuild-migration on a host
-
-`nixos-rebuild-migration` is also optional.
-Only hosts that use PostgreSQL locally should enable it.
-
-To enable it:
-
-```nix
-{pkgs,...}: {
-  # ... other host configurations ...
-  environment.systemPackages = [
-    # ... other systemPackages ...
-    self.packages.${pkgs.system}.nixos-rebuild-migration
-    # ... other systemPackages ...
-  ];
-  # ... other host configurations ...
-}
-```
-
-This avoids installing PostgreSQL migration tooling on machines that don't use PostgreSQL.
-
 ## 📚 Documentation
 
 Full documentation is available in the [`/docs/`](./docs/) directory:
@@ -462,7 +401,6 @@ Full documentation is available in the [`/docs/`](./docs/) directory:
 - [Deployment](./docs/modules/deployment.md)
 - [The two gates and their guards](./docs/scripts/guards.md)
 - [Running the apps locally](./docs/scripts/run-local.md)
-- [Migration scripts](./docs/scripts/)
 
 ## 🧠 Notes
 
