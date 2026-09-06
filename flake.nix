@@ -7,7 +7,6 @@
       url = "github:nix-community/home-manager/release-26.05";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    flake-utils.url = "github:numtide/flake-utils";
     deploy-rs = {
       url = "github:serokell/deploy-rs";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -20,7 +19,6 @@
   outputs = inputs@ { self
                     , nixpkgs
                     , nixos-wsl
-                    , flake-utils
                     , home-manager
                     , deploy-rs
                     , agenix
