@@ -71,13 +71,17 @@ Example:
 graphical.fonts = [ "hack-font" "noto-fonts" ];
 ```
 
-### `graphical.vscode.enable`
+### `graphical.nixLd.enable`
 
-Enables VSCode Remote integration via nix-ld. (`true` by default in mode `WSL`)
+Runs unpatched dynamically linked binaries, which is what a remote editor's server is. Defaults to `mode == "WSL"`, where one usually follows.
 
 ```Nix
-graphical.vscode.enable = true;
+graphical.nixLd.enable = true;
 ```
+
+**It is the one option here that a headless host can use.** Everything else in this module sits behind `mkIf graphical.enable`; this does not, deliberately — a headless server is exactly where a remote editor matters, and it is the one host that never enables a graphical environment.
+
+For a `code` command usable from an ordinary ssh session, that is [`vscode.nix`](./vscode.md), a separate module.
 
 ## Behavior Summary
 
@@ -88,7 +92,7 @@ graphical.vscode.enable = true;
 
 `graphical.fonts`, `keymap` and `variant` are consumed inside `services.xserver` and a `mkIf isGraphical`, so under `mode = "WSL"` they accept a value and do nothing. The fonts that do reach a WSL host come from `common.nix`, not from here.
 
-The last column is `graphical.vscode.enable`, whose only effect is `programs.nix-ld.enable` — the name predates what it does. It defaults to `mode == "WSL"`, and like everything else here it sits inside `mkIf graphical.enable`, so **a headless host cannot get it from this module**. Such a host sets `programs.nix-ld.enable` directly.
+The last column is `graphical.nixLd.enable`, and it is the only one that reaches a host with `graphical.enable = false`. The rest of the table is inside `mkIf graphical.enable`.
 
 ## Examples
 
@@ -116,8 +120,8 @@ The last column is `graphical.vscode.enable`, whose only effect is `programs.nix
     keymap = "us";
     variant = "altgr-intl";
     fonts = [ "hack-font" "noto-fonts" ];
-    # If you want to remote code via vscode
-    # vscode.enable = true;
+    # If a remote editor is going to attach to this host
+    # nixLd.enable = true;
   };
   # ... other host configurations ...
 }
