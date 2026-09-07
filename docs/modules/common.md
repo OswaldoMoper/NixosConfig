@@ -59,6 +59,17 @@ Ensures tools like `direnv` and Zsh completions are available globally.
 
 Automatically embeds the flake revision into the system configuration.
 
+### `NetworkManager-wait-online`, off under WSL
+
+`nm-online` waits for NetworkManager to declare startup complete, and under WSL it never does: the interface arrives already configured, NM reports it `connected (externally)`, and the unit **fails on every switch** for nothing. Nothing depends on it — `cloudflared` reaches `network-online.target` and starts while it is still failing.
+
+Two things about how it is written, and both are deliberate:
+
+- guarded on `config ? wsl` and not only on its value, because a consuming flake that does not import `nixos-wsl` has no `wsl` namespace at all and reading it would fail evaluation there
+- `mkDefault`, so a host that wants the unit back only has to say `= true`
+
+This is the one piece of conditional logic in a module whose job is what is always true. It earns the place by being a **derived fact** rather than a preference: on WSL the unit cannot succeed, so there is nothing for a host to decide.
+
 ## When to modify this module
 
 Add configuration here when:
