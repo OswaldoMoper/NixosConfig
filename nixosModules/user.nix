@@ -2,6 +2,9 @@
 
 let
   inherit (lib) mkIf mkOption mkEnableOption types mapAttrs optionalString concatStringsSep recursiveUpdate;
+
+  outOfStoreLink = name: path:
+    pkgs.runCommandLocal name { } "ln -s ${lib.escapeShellArg path} $out";
 in
 {
   options.hmProfiles.dirs = mkOption {
@@ -74,6 +77,26 @@ in
               default = "";
               description = "Path to password file";
             };
+            configFile = mkOption {
+              type = types.str;
+              default = "";
+              example = "/run/agenix/msmtp-config";
+              description = ''
+                Path **on the target machine** to a complete msmtprc, which is
+                then used instead of generating one.
+
+                The generated file goes to the Nix store, and the store is
+                world-readable: the address ends up in a 444 root:root file that
+                every account on the machine can read. Nothing this module can do
+                about it, since msmtp has no `fromeval` to match `passwordeval` —
+                only the whole file can come from somewhere else.
+
+                A string, not a path: interpolating a path would copy the file
+                into the store, which is the thing being avoided. It is symlinked
+                rather than copied, so its own ownership and mode are what msmtp
+                sees.
+              '';
+            };
           };
           sshKeys = {
             enable = mkEnableOption "Enable SSH key auto-loading";
@@ -118,10 +141,20 @@ in
     # wins. Guarded because the directory need not exist.
     hmProfiles.dirs = lib.mkAfter (lib.optional (builtins.pathExists ../hmProfiles) ../hmProfiles);
 
-    assertions = lib.mapAttrsToList (name: cfg: {
-      assertion = (cfg.home.enable && cfg.home.msmtp.enable) -> cfg.home.msmtp.passwordFile != "";
-      message = "myUsers.${name}.home.msmtp is enabled but passwordFile is empty.";
-    }) config.myUsers;
+    assertions = lib.concatLists (lib.mapAttrsToList (name: cfg:
+      let
+        on = cfg.home.enable && cfg.home.msmtp.enable;
+        m = cfg.home.msmtp;
+      in [
+        {
+          assertion = (on && m.configFile == "") -> m.passwordFile != "";
+          message = "myUsers.${name}.home.msmtp is enabled but passwordFile is empty.";
+        }
+        {
+          assertion = (on && m.configFile != "") -> m.passwordFile == "";
+          message = "myUsers.${name}.home.msmtp sets configFile, which supplies the whole msmtprc, so passwordFile would be ignored.";
+        }
+      ]) config.myUsers);
 
     users.users = mapAttrs (name: cfg:
       mkIf cfg.enable (
@@ -164,21 +197,26 @@ in
           email = cfg.home.git.email;
         };
       };
-      home.file.".config/msmtp/config" = mkIf cfg.home.msmtp.enable {
-        text = ''
-          defaults
-          auth           on
-          tls            on
-          tls_trust_file /etc/ssl/certs/ca-certificates.crt
+      home.file.".config/msmtp/config" = mkIf cfg.home.msmtp.enable (
+        if cfg.home.msmtp.configFile != "" then
+          { source = outOfStoreLink "msmtp-config" cfg.home.msmtp.configFile; }
+        else
+          {
+            text = ''
+              defaults
+              auth           on
+              tls            on
+              tls_trust_file /etc/ssl/certs/ca-certificates.crt
 
-          account default
-          host smtp.gmail.com
-          port 587
-          from ${cfg.home.msmtp.email}
-          user ${cfg.home.msmtp.email}
-          passwordeval "cat ${cfg.home.msmtp.passwordFile}"
-        '';
-      };
+              account default
+              host smtp.gmail.com
+              port 587
+              from ${cfg.home.msmtp.email}
+              user ${cfg.home.msmtp.email}
+              passwordeval "cat ${cfg.home.msmtp.passwordFile}"
+            '';
+          }
+      );
       home.packages = mkIf cfg.home.msmtp.enable [
         pkgs.msmtp
       ];
