@@ -1,6 +1,9 @@
 {config, pkgs, lib, inputs, ...}:
 
 {
+  systemd.services.NetworkManager-wait-online.enable =
+    lib.mkIf (config ? wsl && config.wsl.enable) (lib.mkDefault false);
+
   system.stateVersion = lib.mkDefault "26.05";
   environment.pathsToLink = [
     "/share/nix-direnv"
