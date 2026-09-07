@@ -38,6 +38,7 @@ A user entry has the following shape:
         enable = false;
         email = <defaults to user email>;
         passwordFile = "";
+        configFile = "";
       };
       sshKeys = { 
         enable = false;
@@ -121,6 +122,64 @@ home.msmtp = {
   passwordFile = "/home/user/pgpass.txt";
 };
 ```
+
+### The generated file puts the address in the store
+
+Measured on a live machine: `~/.config/msmtp/config` is a symlink into the Nix store, and the store is world-readable.
+
+```text
+-r--r--r-- root root   .../home-manager-files/.config/msmtp/config
+   from <address>
+   user <address>
+```
+
+So **every account on the machine can read the address**, not only whoever can read this repo. Encrypting `email` does not help: Nix interpolates it while building.
+
+There is no half fix. msmtp has a `passwordeval` and **no `fromeval`** — checked against `msmtp(1)` — so `from` and `user` can only come from somewhere else if the whole file does.
+
+### `home.msmtp.configFile`
+
+A complete `msmtprc` on the target machine, used **instead of** generating one.
+
+```Nix
+home.msmtp = {
+  enable = true;
+  configFile = "/run/agenix/msmtp-omoper";
+};
+```
+
+| | |
+| --- | --- |
+| Type | **string, not path** — interpolating a path copies the file into the store, which is the thing being avoided |
+| How it is applied | symlinked, never copied, so the file keeps its own owner and mode. What lands in the store is a **symlink and nothing else** |
+| `passwordFile` | must be empty. An assertion says so, because `configFile` supplies the whole file and a `passwordFile` beside it is read by nothing |
+
+### Why the password can only live here
+
+`passwordeval "cat <file>"` exists in the generated file because the plain `password` directive **cannot** be used there. msmtp checks the mode itself and refuses:
+
+```text
+msmtp: <file>: contains secrets and therefore must have no more than
+       user read/write permissions
+```
+
+A store file is `444`, so that is a hard failure rather than a quiet leak. Move the file out of the store and `password` becomes available — which is the point of `configFile`: `from`, `user` and the password in **one** agenix secret, and no separate cleartext password file at all.
+
+Measured: the check applies to the **resolved** file, not to the symlinks pointing at it, so the chain this module builds passes at `0400` and is refused at `444`.
+
+### The agenix secret needs an `owner`
+
+agenix writes `root:root 0400` by default, and msmtp runs as the user, so without
+
+```Nix
+age.secrets.msmtp-omoper = {
+  file = ../secrets/msmtp-omoper.age;
+  owner = "omoper";     # not optional
+  mode = "0400";
+};
+```
+
+the file is unreadable by the one process that needs it — and mail simply stops going out. Same rule as `passwordFile`, and it bites harder here because the whole configuration is in that file.
 
 ## SSH Key Auto-loading
 
