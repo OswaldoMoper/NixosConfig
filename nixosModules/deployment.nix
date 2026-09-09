@@ -7,6 +7,23 @@ with lib; {
       options = {
         hostname = mkOption { type = types.str; };
         fastConnection = mkOption { type = types.bool; default = false; };
+        checks = mkOption {
+          type = types.listOf types.str;
+          default = [ ];
+          example = [ "pre-deploy-xesOasis" "hosts-declared" ];
+          description = ''
+            Which flake checks the deploy gate builds before it deploys this
+            node, named as attributes of `checks.<system>`.
+
+            The empty default means every check in the flake, which is right
+            when they all speak for every host. It stops being right the moment
+            a flake grows checks that belong to one environment: deploying a
+            host that runs none of those applications would build them anyway,
+            and a gate that does the wrong work gets skipped by hand.
+
+            The node says what concerns it because the node is what knows.
+          '';
+        };
         profiles = mkOption {
           default = {};
           type = types.attrsOf (types.submodule {
