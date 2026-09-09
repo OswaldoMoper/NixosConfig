@@ -65,10 +65,28 @@ step "2/8 binary caches on this machine"
 }
 
 step "3/8 pure checks"
-nix flake check "$GATE_FLAKE" || {
-  printf 'pure checks failed; nothing was deployed\n' >&2
-  exit 1
-}
+# Empty GATE_CHECKS means every check in the flake, which is right while they
+# all speak for every host. A node that names its own gets those and no more:
+# a flake with per-environment application checks would otherwise build
+# websites for environments this host has nothing to do with, and a gate that
+# does the wrong work is a gate people learn to skip.
+if [ -n "${GATE_CHECKS:-}" ]; then
+  read -r -a gate_checks <<< "$GATE_CHECKS"
+  attrs=()
+  for c in "${gate_checks[@]}"; do
+    attrs+=("${GATE_FLAKE}#checks.${GATE_SYSTEM:-x86_64-linux}.${c}")
+  done
+  printf 'checks this node names: %s\n' "$GATE_CHECKS"
+  nix build --no-link "${attrs[@]}" || {
+    printf 'pure checks failed; nothing was deployed\n' >&2
+    exit 1
+  }
+else
+  nix flake check "$GATE_FLAKE" || {
+    printf 'pure checks failed; nothing was deployed\n' >&2
+    exit 1
+  }
+fi
 
 step "4/8 live preconditions"
 # The gate has to be overridable or it gets bypassed by hand, which is worse:

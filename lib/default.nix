@@ -179,6 +179,7 @@ in
                 export GATE_PRE_DEPLOY=${lib.getExe (liveCheck nodeName node "pre-deploy")}
                 export GATE_ACCESS=${lib.getExe (accessGuard nodeName node)}
                 export GATE_VERIFY=${lib.getExe (liveCheck nodeName node "verify")}
+                export GATE_CHECKS=${lib.escapeShellArg (lib.concatStringsSep " " (node.checks or [ ]))}
 
                 ${builtins.readFile ../scripts/deploy-gate.sh}
               '';
