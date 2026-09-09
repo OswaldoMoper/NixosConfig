@@ -42,9 +42,6 @@
         (import ./nixosModules/vm.nix)
       ];
     hostDir = ./hosts;
-    hostFiles = builtins.filter
-      (name: builtins.match ".*\\.nix$" name != null)
-      (builtins.attrNames (builtins.readDir hostDir));
     mkHost = hostName: nixpkgs.lib.nixosSystem {
       inherit system;
       specialArgs = {
@@ -55,11 +52,7 @@
         (import (hostDir + "/${hostName}.nix"))
       ];
     };
-    nixosConfigurations =
-      builtins.listToAttrs (map (file: {
-        name = builtins.replaceStrings [".nix"] [""] file;
-        value = mkHost (builtins.replaceStrings [".nix"] [""] file);
-      }) hostFiles);
+    nixosConfigurations = lib.mapAttrs (name: _: mkHost name) (myLib.nixFilesIn hostDir);
   in {
     inherit nixosConfigurations;
     lib = myLib;
@@ -95,14 +88,6 @@
             touch "$out"
           '';
     };
-    nixosModules = let
-        moduleDir = ./nixosModules;
-        moduleFiles = builtins.filter
-          (name: builtins.match ".*\\.nix$" name != null)
-          (builtins.attrNames (builtins.readDir moduleDir));
-      in builtins.listToAttrs (map (file: {
-        name = builtins.replaceStrings [".nix"] [""] file;
-        value = import (moduleDir + "/${file}");
-      }) moduleFiles);
+    nixosModules = lib.mapAttrs (_: import) (myLib.nixFilesIn ./nixosModules);
   };
 }

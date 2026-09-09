@@ -16,7 +16,7 @@ Currently optimized for `x86_64-linux`.
 
 **Modules are listed twice.** The `nixosModules` *output* is a directory sweep, so a new file there is exported to consumers automatically. But the list applied to this repo's own hosts is written out by hand. A module can therefore be shipped and never evaluated here — which has happened. The two agree today; nothing enforces that they keep agreeing.
 
-Both sweeps filter on `.nix`. The module one must, because anything else in that directory would be `import`ed as a module and break **the consuming flake**, not this one.
+Both sweeps are one function — `lib.nixFilesIn`, exported like the rest of `lib/` — so the `.nix` filter cannot be present in one and missing in the other. It has to be there: anything else in that directory would be `import`ed as a module and break **the consuming flake**, not this one. That is not hypothetical — the module sweep once lacked the filter, and the failure showed up downstream.
 
 ## Deployment architecture
 
@@ -52,7 +52,7 @@ Worth knowing before trusting a green check on a change to `lib/` or a module.
 | | |
 | --- | --- |
 | `nixosModules/` | the product: options other flakes consume |
-| `lib/` | `mkDeployNodes`, `mkPreDeployApps`, `mkVmApps`, `mkLocalRunApps` |
+| `lib/` | `nixFilesIn`, `mkDeployNodes`, `mkPreDeployApps`, `mkVmApps`, `mkLocalRunApps` |
 | `scripts/` | the two gates, their four guards, and the database rename |
 | `hosts/` | this repo's own machines — currently one |
 | `hmProfiles/` | per-user Home Manager profiles; searched via `hmProfiles.dirs`, and a consumer's own directory wins |
