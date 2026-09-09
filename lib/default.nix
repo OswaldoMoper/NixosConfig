@@ -6,6 +6,16 @@ let
   unitOf = a: if a.unit != null then a.unit else (if a.kind == "managed" then a.name else null);
 in
 {
+  nixFilesIn =
+    dir:
+    lib.listToAttrs (
+      map (file: {
+        name = builtins.replaceStrings [ ".nix" ] [ "" ] file;
+        value = dir + "/${file}";
+      }) (lib.filter (name: builtins.match ".*\\.nix$" name != null)
+            (lib.attrNames (builtins.readDir dir)))
+    );
+
   mkPreDeployApps =
     {
       pkgs,
