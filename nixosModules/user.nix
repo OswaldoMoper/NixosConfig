@@ -64,6 +64,18 @@ in
               default = "";
               description = "GitHub username";
             };
+            includeFiles = mkOption {
+              type = types.listOf types.str;
+              default = [ ];
+              example = [ "/run/agenix/git-identity" ];
+              description = ''
+                Paths **on the target machine** included from the generated
+                config, after the settings above, so whatever they declare wins.
+
+                Meant for an identity that must not reach the repository: the
+                generated config is committed, a file read at runtime is not.
+              '';
+            };
           };
           msmtp = {
             enable = mkEnableOption "Enable msmtp";
@@ -131,6 +143,25 @@ in
               in the agent, which is what trips a server's MaxAuthTries.
             '';
           };
+          sshIncludes = mkOption {
+            type = types.listOf types.str;
+            default = [ ];
+            example = [ "/run/agenix/ssh-hosts*" ];
+            description = ''
+              Globs of further ssh config files, emitted as Include ahead of
+              every host block, which is where ssh_config takes its first and
+              therefore winning value.
+
+              Meant for host entries that must not reach the repository: an
+              address and the account it is reached with are worth as much to
+              whoever reads a leaked repository as they are to their owner.
+              Point one at a decrypted secret and neither reaches the store.
+
+              A glob that matches nothing is skipped in silence, so a secret
+              that failed to decrypt leaves ssh working rather than failing on
+              every connection.
+            '';
+          };
         };
       };
     }));
@@ -196,6 +227,7 @@ in
           name = cfg.home.git.tag;
           email = cfg.home.git.email;
         };
+        includes = map (path: { inherit path; }) cfg.home.git.includeFiles;
       };
       home.file.".config/msmtp/config" = mkIf cfg.home.msmtp.enable (
         if cfg.home.msmtp.configFile != "" then
@@ -223,6 +255,7 @@ in
       programs.ssh = {
         enable = true;
         enableDefaultConfig = false;
+        includes = cfg.home.sshIncludes;
         settings = cfg.home.sshHosts // {
           "*" = {
             AddKeysToAgent = "yes";
