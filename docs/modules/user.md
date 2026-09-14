@@ -33,6 +33,7 @@ A user entry has the following shape:
         enable = false;
         email = <defaults to user email>;
         tag = ""; 
+        includeFiles = [ ];
       };
       msmtp = {
         enable = false;
@@ -107,6 +108,16 @@ When `home.git.enable = true`, the module configures:
 Defaults:
 
 - `email` defaults to `myUsers.<name>.email`
+
+### `home.git.includeFiles` — an identity that is not committed
+
+```Nix
+includeFiles = [ "/run/agenix/git-identity" ];
+```
+
+Each path becomes an `include.path` entry. Home Manager emits them with `mkAfter`, so they land **after** the settings above, and git keeps the last value it reads: what the included file declares wins over `tag` and `email`.
+
+That is what lets an address be read only at runtime. The generated config travels with the configuration that produced it; a file decrypted into `/run/agenix` does not.
 
 ## msmtp Configuration
 
@@ -231,6 +242,18 @@ Two things worth knowing before using it:
 
 - `IdentityFile` **accumulates** across every matching block. A host block **adds to** the global ones rather than replacing them, which is why `IdentitiesOnly = true` belongs here: it is what stops ssh from also offering everything in the agent.
 - The blocks are merged as `sshHosts // { "*" = … }`, so a pattern literally named `*` would be silently discarded. Put global directives in the module, not in a `"*"` entry.
+
+### `home.sshIncludes` — host blocks that are not committed
+
+```Nix
+sshIncludes = [ "/run/agenix/ssh-hosts" ];
+```
+
+Emitted as a single `Include` ahead of every host block, which in `ssh_config` is where the winning value is taken: the **first** match wins here, the opposite of git.
+
+An address and the account it is reached with are worth as much to whoever reads a leaked repository as they are to its owner, so what `sshHosts` writes into the store this keeps out of it.
+
+An `Include` whose file does not exist is ignored in silence — measured with `ssh -G` against both an exact path and a glob, each resolving the host and exiting 0 — so a secret that failed to decrypt leaves ssh working rather than failing on every connection.
 
 ## Examples
 
