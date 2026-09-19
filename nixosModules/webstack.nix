@@ -218,6 +218,37 @@ in
         description = "ACME and webStack notifications";
       };
 
+      profiles = mkOption {
+        type = types.attrsOf types.attrs;
+        default = { };
+        internal = true;
+        description = ''
+          Per `kind = "profile"` app, the settings its own module should take
+          from this registry rather than from a second hand-written copy: the
+          public name, the backend port and the ACME email.
+
+          A host merges it into the app's own option, naming only where it goes:
+
+              services.moperapp.profile = lib.mkMerge [
+                config.webStack.profiles.MoperApp
+                { mode = "production"; }
+              ];
+
+          The pointer is stated for the same reason `unit` is — an app called
+          MoperApp declares `services.moperapp.profile`, and no rule turns one
+          into the other. What used to be stated twice, and drifted, is the
+          data: a host reached production with an ACME email that was never
+          threaded, and only the absence of TLS in development hid it.
+
+          webStack derives it; writing to it is the duplication this exists to
+          remove.
+
+          Merging it also makes a mismatch loud. The app's module has to accept
+          `serverName`, `ports.backend` and `acmeEmail` under that name, or the
+          host fails to evaluate saying which option is missing.
+        '';
+      };
+
       nginx = {
         enable = mkEnableOption "Nginx stack";
         apps = mkOption {
@@ -270,6 +301,13 @@ in
     };
 
     config = mkIf cfg.enable {
+      webStack.profiles = lib.listToAttrs (map (a: lib.nameValuePair a.name {
+        enable = true;
+        serverName = a.domain;
+        ports.backend = a.port;
+        acmeEmail = cfg.email;
+      }) (lib.filter (a: a.kind == "profile") (cfg.tunnel.apps ++ cfg.nginx.apps)));
+
       postgresql.ensure = map (a: {
         database = a.database.name;
         role = a.database.user;

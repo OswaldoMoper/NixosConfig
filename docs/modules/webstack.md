@@ -235,14 +235,48 @@ unnoticed until deployment. With one, it fails during evaluation.
     { name = "blog"; domain = "example.com"; port = 2001; package = inputs.blog; }
     { kind = "profile"; name = "example2"; domain = "example2.org"; port = 3003; }
   ];
-  services.example2.profile = {
-    enable = true;
-    mode = "production";
-    serverName = "example2.org";
-    ports.backend = 3003;
-  };
+  services.example2.profile = lib.mkMerge [
+    config.webStack.profiles.example2
+    { mode = "production"; }
+  ];
 }
 ```
+
+### `profiles`: configure the app, do not restate it
+
+A `"profile"` app used to be declared twice — once in `nginx.apps` for the assertions
+and the TLS layer, once in `services.<app>.profile` for everything real — with the
+domain, the port and the ACME email written out on both sides and kept in step by
+hand. `webStack.profiles.<name>` is the first side handing the second what it already
+knows: `enable`, `serverName`, `ports.backend` and `acmeEmail`.
+
+| | comes from | |
+| --- | --- | --- |
+| `enable` | the entry existing | derived |
+| `serverName` | `domain` | derived |
+| `ports.backend` | `port` | derived |
+| `acmeEmail` | `webStack.email` | derived |
+| `mode`, secrets, database, everything app-specific | the host | stated once |
+
+The host still names **where** the settings go, because nothing can turn `MoperApp`
+into `services.moperapp.profile` by rule — the same reason `unit` is stated rather
+than derived. What stops being stated is the data.
+
+Two consequences worth knowing before using it:
+
+- **A mismatch is loud.** The app's module has to accept those four under those names.
+  If it does not, the host fails to evaluate naming the missing option, instead of
+  quietly ignoring half the registry.
+- **Redefining a derived value is an error, and that is the point.** Setting
+  `serverName` in the host's own block conflicts with the merged definition. Measured:
+  `The option 'services.<app>.profile.serverName' has conflicting definition values`.
+
+**Why it exists, in one measured case.** A host reached `mode = "development"` with
+`acmeEmail` left at its module's default — a different address than the host's
+`webStack.email` — because the value had to be threaded by hand on one profile and was
+threaded on the other. Nothing failed: development mode never applies the ACME block,
+so the wrong address sat there inert, waiting for the day that host went to production.
+Deriving it is what makes that day uneventful.
 
 ### Secrets
 
