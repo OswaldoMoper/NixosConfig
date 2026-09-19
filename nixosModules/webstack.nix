@@ -1,4 +1,4 @@
-{ config, pkgs, lib, inputs, ... }:
+{ config, options, pkgs, lib, inputs, ... }:
 
 let 
   inherit (lib) mkIf mkOption mkEnableOption types listToAttrs mkMerge;
@@ -146,6 +146,98 @@ let
           listener on the virtualHost the app's own module created, without
           taking over its locations. "managed" apps in nginx.apps already get
           this from webStack, so it is only meaningful for profiles.
+        '';
+      };
+      profile = mkOption {
+        type = types.nullOr (types.submodule {
+          options = {
+            attr = mkOption {
+              type = types.str;
+              example = "moperapp";
+              description = ''
+                The attribute under `services` where this app's module lives.
+                Stated for the same reason `unit` is: an app called MoperApp
+                declares `services.moperapp.profile`, and no rule turns one into
+                the other.
+              '';
+            };
+            module = mkOption {
+              type = types.nullOr types.deferredModule;
+              default = null;
+              description = "The app's own NixOS module, so the host does not import it separately.";
+            };
+            settings = mkOption {
+              type = types.attrs;
+              default = { };
+              example = { mode = "production"; };
+              description = ''
+                Everything the app's module needs that webStack cannot know.
+                What webStack derives — see `webStack.profiles` — must not
+                appear here: two definitions of one option is an error.
+              '';
+            };
+          };
+        });
+        default = null;
+        description = ''
+          Data for `lib.appModules`, which turns this entry into the app's own
+          module and its settings. This module only declares it.
+
+          Nothing here writes to `services.<attr>.profile`, and that is not an
+          oversight: building an option PATH out of an option VALUE makes the
+          module system evaluate `config` to learn which options exist, which is
+          its own fixpoint. Measured, as infinite recursion.
+
+          `lib.appModules` is outside that fixpoint, so it can. The host passes
+          it the same list it assigns here:
+
+              let apps = [ … ]; in {
+                imports = [ … ] ++ nixosConfig.lib.appModules apps;
+                webStack.nginx.apps = apps;
+              }
+
+          One list, written once, read twice.
+        '';
+      };
+      secrets = mkOption {
+        type = types.attrsOf types.attrs;
+        default = { };
+        example = { moperapp-env = { file = ./secrets/moperapp-env.age; }; };
+        description = ''
+          agenix secrets this app needs, keyed as `age.secrets` keys them.
+
+          They live here rather than in a separate `age.secrets` block so that
+          everything about one app is in one place. A host that spreads an app
+          over four top-level attributes has four places to keep in step, and
+          nothing tells it when one falls behind.
+        '';
+      };
+      directories = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        example = [ "d /upload 0755 admin users -" ];
+        description = ''
+          systemd-tmpfiles rules for the directories this app owns, in tmpfiles
+          syntax.
+
+          Two rules of the same TYPE for the same path do NOT merge: systemd
+          keeps one, warns about the other, and which one survives depends on
+          the order of the generated file. Two apps that share a directory
+          therefore need one rule between them, plus a rule of a different type
+          — `z` adjusts a path without recursing — for whatever else differs.
+        '';
+      };
+      redirects = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        example = [ "www.moperapp.org" ];
+        description = ''
+          Names that should 301 to this app's own domain.
+
+          The general form stays `webStack.nginx.redirects`, which points
+          anywhere. This is the common case — a bare `www` — expressed where the
+          app is, because that is the one a host forgets to move when the app's
+          domain changes.
         '';
       };
       default = mkOption {
@@ -301,12 +393,25 @@ in
     };
 
     config = mkIf cfg.enable {
+      # `options ? age` guards the attribute so a host without agenix still
+      # evaluates, which is how the app modules guard theirs.
+      age = lib.mkIf (options ? age) {
+        secrets = lib.mkMerge (map (a: a.secrets) (cfg.tunnel.apps ++ cfg.nginx.apps));
+      };
+
       webStack.profiles = lib.listToAttrs (map (a: lib.nameValuePair a.name {
         enable = true;
         serverName = a.domain;
         ports.backend = a.port;
         acmeEmail = cfg.email;
       }) (lib.filter (a: a.kind == "profile") (cfg.tunnel.apps ++ cfg.nginx.apps)));
+
+      systemd.tmpfiles.rules =
+        lib.concatMap (a: a.directories) (cfg.tunnel.apps ++ cfg.nginx.apps);
+
+      webStack.nginx.redirects = lib.listToAttrs (lib.concatMap
+        (a: map (from: lib.nameValuePair from "https://${a.domain}") a.redirects)
+        (cfg.tunnel.apps ++ cfg.nginx.apps));
 
       postgresql.ensure = map (a: {
         database = a.database.name;

@@ -495,3 +495,46 @@ Do **not** use it for:
 - Static-only hosting
 - Reverse proxies unrelated to apps
 - Docker-based deployments
+
+### `lib.appModules`: one block per app
+
+`profiles` removes the data that used to be written twice. What it cannot remove is the second
+*place*: `services.<app>.profile` still has to be assigned somewhere, and so do the app's agenix
+secrets, its tmpfiles rules and its redirects. A host ended up spreading one app over four or five
+top-level attributes, with nothing to say when one fell behind.
+
+Three of those four are **fixed** option paths, so this module writes them itself from the entry:
+`secrets` → `age.secrets`, `directories` → `systemd.tmpfiles.rules`, `redirects` →
+`nginx.redirects`.
+
+The fourth is not: `services.<attr>.profile` needs an attribute **name** taken from the entry, and
+building an option path out of an option value makes the module system evaluate `config` to learn
+which options exist — its own fixpoint, and measured as infinite recursion.
+
+`lib.appModules` lives outside that fixpoint, so it can. The host writes the list once and passes it
+to both:
+
+```Nix
+let
+  apps = [
+    { name = "blog"; domain = "example.com"; port = 2001; package = inputs.blog;
+      secrets.blog-env.file = ./secrets/blog-env.age;
+      directories = [ "d /var/lib/blog 0750 admin users -" ];
+      redirects = [ "www.example.com" ]; }
+
+    { kind = "profile"; name = "example2"; unit = "example2"; domain = "example2.org"; port = 3003;
+      profile = { attr = "example2";
+                  module = inputs.example2.nixosModules.default;
+                  settings = { mode = "production"; }; }; }
+  ];
+in {
+  imports = [ ./hardware.nix ] ++ inputs.nixosConfig.lib.appModules apps;
+  webStack.nginx.apps = apps;
+}
+```
+
+`apps` is a plain value, not `config.*`, which is exactly why this works.
+
+**What it deliberately does not absorb:** the account the units run as. That is
+`webStack.manager`, one per host and shared by every managed app — a fact about the machine, not
+about an app.
