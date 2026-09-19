@@ -26,6 +26,7 @@ let
       inherit enableACME;
       inherit (app) default;
       forceSSL = enableACME;
+      serverAliases = app.aliases;
       locations."/" = {
         proxyPass = "http://localhost:${toString app.port}";
         proxyWebsockets = true;
@@ -241,6 +242,30 @@ let
           the order of the generated file. Two apps that share a directory
           therefore need one rule between them, plus a rule of a different type
           — `z` adjusts a path without recursing — for whatever else differs.
+        '';
+      };
+      aliases = mkOption {
+        type = types.listOf types.str;
+        default = [ ];
+        example = [ "moperapp.net" ];
+        description = ''
+          Other names that serve THIS app, not a redirect to it: they reach the
+          same vhost and the certificate covers them.
+
+          The difference from `redirects` is what the visitor ends up on. An
+          alias keeps the name they typed; a redirect sends them to `domain`.
+          Both are legitimate and a host usually wants one of each — the `.net`
+          that should behave like the `.org`, and the `www.` that should not.
+
+          They count towards the same uniqueness assertions as `domain`, which
+          is the point: an alias is a name this machine answers on, so two apps
+          claiming one is the collision those assertions exist to catch.
+
+          NixOS puts `serverAliases` into the certificate itself — measured in
+          nixpkgs, `nginx/default.nix` sets `extraDomainNames` from them — so
+          **each alias needs its own DNS record pointing here first**. A name
+          that does not resolve fails the order for the whole certificate, not
+          just for itself.
         '';
       };
       redirects = mkOption {
@@ -551,10 +576,16 @@ in
             assertion = 
               let
                 domains = (map (a: a.domain) allApps)
+                  ++ (lib.concatMap (a: a.aliases) allApps)
                   ++ (builtins.attrNames cfg.nginx.redirects)
                   ++ (lib.optional cfg.tunnel.ssh.enable cfg.tunnel.ssh.domain);
               in builtins.length (lib.unique domains) == builtins.length domains;
-            message = "webStack: Each service must have a unique domain.";
+            message = ''
+              webStack: Each service must have a unique domain.
+
+              An alias counts: it is a name this machine answers on, so it
+              shares the namespace with domains and redirects.
+            '';
           }
           {
             assertion =
@@ -615,6 +646,16 @@ in
               ];
             };
           }) (lib.filter (a: a.kind == "profile" && a.tls) (cfg.tunnel.apps ++ cfg.nginx.apps))))
+
+          # A profile app's own module built the vhost, so the aliases go onto
+          # it rather than into one of ours.
+          (listToAttrs (map (app: {
+            name = app.domain;
+            value = {
+              serverAliases = app.aliases;
+            };
+          }) (lib.filter (a: a.kind == "profile" && a.aliases != [ ])
+                (cfg.tunnel.apps ++ cfg.nginx.apps))))
           (lib.mapAttrs (_: target: {
             enableACME = true;
             forceSSL = true;
