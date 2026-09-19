@@ -464,4 +464,22 @@ in
           collisions
       }
     '' flattened;
+
+  appModules =
+    apps:
+    let
+      withProfile = lib.filter (a: a.profile or null != null) apps;
+    in
+    map (
+      a:
+      { config, ... }:
+      {
+        imports = lib.optional (a.profile.module or null != null) a.profile.module;
+
+        config.services.${a.profile.attr}.profile = lib.mkMerge [
+          config.webStack.profiles.${a.name}
+          (a.profile.settings or { })
+        ];
+      }
+    ) withProfile;
 }
