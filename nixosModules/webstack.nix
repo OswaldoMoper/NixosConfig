@@ -263,6 +263,25 @@ let
               type = types.str;
               description = "PostgreSQL role the app connects as.";
             };
+            provision = mkOption {
+              type = types.bool;
+              default = true;
+              description = ''
+                Whether webStack should be the one to create this database and
+                role, through `postgresql.ensure`.
+
+                False when something else already does — typically a
+                `kind = "profile"` app whose own module declares
+                `ensureDatabases`, or a second app on the same database. The
+                entry stays because it is what the assertions read: declaring a
+                database is how an app says which one it needs, and that is
+                worth checking whoever creates it.
+
+                Two provisioners for one database is what this exists to avoid.
+                It is not a harmless duplicate: each writes ownership and the
+                role's password on every activation, in an order nothing fixes.
+              '';
+            };
             passwordFile = mkOption {
               type = types.nullOr types.str;
               default = null;
@@ -417,7 +436,8 @@ in
         database = a.database.name;
         role = a.database.user;
         inherit (a.database) passwordFile;
-      }) (lib.filter (a: a.database != null) (cfg.tunnel.apps ++ cfg.nginx.apps));
+      }) (lib.filter (a: a.database != null && a.database.provision)
+            (cfg.tunnel.apps ++ cfg.nginx.apps));
 
       assertions = let allApps = cfg.tunnel.apps ++ cfg.nginx.apps;
         in [
@@ -428,6 +448,38 @@ in
           {
             assertion = lib.any (a: a.database != null) allApps -> config.postgresql.enable;
             message = "webStack: an app declares a database but postgresql.enable is false, so nothing would create it.";
+          }
+          # Declaring a database is not the same as anything creating it, and
+          # `provision = false` is exactly where the two come apart.
+          {
+            assertion = lib.all
+              (a: lib.elem a.database.name config.services.postgresql.ensureDatabases)
+              (lib.filter (a: a.database != null) allApps);
+            message = ''
+              webStack: an app declares a database that nothing provisions.
+
+              ${lib.concatMapStringsSep "\n" (a: "  ${a.name} reads ${a.database.name}")
+                (lib.filter (a: a.database != null
+                               && !(lib.elem a.database.name config.services.postgresql.ensureDatabases))
+                  allApps)}
+
+              Either let webStack create it (database.provision = true) or make
+              sure whatever module was meant to declares it in
+              services.postgresql.ensureDatabases.
+            '';
+          }
+          {
+            assertion = lib.all
+              (a: lib.elem a.database.user (map (u: u.name) config.services.postgresql.ensureUsers))
+              (lib.filter (a: a.database != null) allApps);
+            message = ''
+              webStack: an app declares a role that nothing provisions.
+
+              ${lib.concatMapStringsSep "\n" (a: "  ${a.name} connects as ${a.database.user}")
+                (lib.filter (a: a.database != null
+                               && !(lib.elem a.database.user (map (u: u.name) config.services.postgresql.ensureUsers)))
+                  allApps)}
+            '';
           }
           {
             assertion = lib.all (app: app.kind != "managed" || app.package != null) allApps;
