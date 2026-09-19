@@ -202,7 +202,12 @@ let
       secrets = mkOption {
         type = types.attrsOf types.attrs;
         default = { };
-        example = { moperapp-env = { file = ./secrets/moperapp-env.age; }; };
+        example = {
+          moperapp-env = {
+            file = ./secrets/moperapp-env.age;
+            vmValue = "MOPERAPP_PGPASS=vmtest";
+          };
+        };
         description = ''
           agenix secrets this app needs, keyed as `age.secrets` keys them.
 
@@ -210,6 +215,17 @@ let
           everything about one app is in one place. A host that spreads an app
           over four top-level attributes has four places to keep in step, and
           nothing tells it when one falls behind.
+
+          One key is not agenix's: `vmValue`. It is stripped before the rest is
+          handed over, and becomes this secret's stand-in inside
+          `run-<host>-vm`, which cannot decrypt anything because the ciphertext
+          is bound to the real host's key.
+
+          It sits next to the secret it stands for, rather than in a list at
+          host level, for the reason the rest of this entry exists: the day the
+          secret is renamed, both move together or neither does. A stand-in that
+          quietly stops matching is worse than none, because the rehearsal still
+          passes — it just stops rehearsing the case production has.
         '';
       };
       directories = mkOption {
@@ -415,8 +431,14 @@ in
       # `options ? age` guards the attribute so a host without agenix still
       # evaluates, which is how the app modules guard theirs.
       age = lib.mkIf (options ? age) {
-        secrets = lib.mkMerge (map (a: a.secrets) (cfg.tunnel.apps ++ cfg.nginx.apps));
+        secrets = lib.mkMerge (map
+          (a: lib.mapAttrs (_: s: removeAttrs s [ "vmValue" ]) a.secrets)
+          (cfg.tunnel.apps ++ cfg.nginx.apps));
       };
+
+      vm.secretValues = lib.mkMerge (map
+        (a: lib.mapAttrs (_: s: s.vmValue) (lib.filterAttrs (_: s: s ? vmValue) a.secrets))
+        (cfg.tunnel.apps ++ cfg.nginx.apps));
 
       webStack.profiles = lib.listToAttrs (map (a: lib.nameValuePair a.name {
         enable = true;
