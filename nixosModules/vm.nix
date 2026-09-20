@@ -101,7 +101,6 @@ in
     # Secrets are encrypted to the real hosts' keys, so a VM cannot open them.
     system.activationScripts = {
       agenixNewGeneration = lib.mkForce "";
-      agenixChown = lib.mkForce "";
       agenixInstall = lib.mkForce ''
         mkdir -p /run/agenix
         ${lib.concatStringsSep "\n" (
@@ -115,11 +114,21 @@ in
             in
             ''
               ${write} ${s.path}
-              chmod 0444 ${s.path}
+              chmod ${s.mode} ${s.path}
             ''
           ) secrets
         )}
       '';
+
+      agenixChown = lib.mkForce {
+        deps = [
+          "users"
+          "groups"
+        ];
+        text = lib.concatStringsSep "\n" (
+          lib.mapAttrsToList (_: s: "chown ${s.owner}:${s.group} ${s.path}") secrets
+        );
+      };
     };
 
     users.users = {
