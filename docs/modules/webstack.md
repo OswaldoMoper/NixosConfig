@@ -374,7 +374,7 @@ The module enforces:
 - All app names must be unique
 - If tunnel is enabled -> must be apps on `tunnels.apps`
 - If nginx is enabled -> must be apps on `nginx.apps`
-- At most one app may set `default = true`
+- At most one app may set `default = true`. Either `kind` may take it: `default_server` is a flag nginx puts on each of a virtualHost's listen directives, so it does not matter whether webStack or the app's own module wrote them
 - An app that declares a `database` needs `postgresql.enable` — otherwise the unit starts and fails to connect, which reads as an app bug
 - **No virtualHost may list the same `addr:port` twice.** `listen` is a `listOf`, so two definitions **concatenate** rather than override: a `kind = "profile"` app whose own module already serves TLS, given `tls = true` here as well, declares 443 twice over. nginx answers that with `[emerg] a duplicate listen` and does not start — measured — so this assertion turns a machine that comes up without a web server into an evaluation error
 

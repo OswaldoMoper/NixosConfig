@@ -294,6 +294,11 @@ let
           Host matches nothing, and the blocks come out in attribute order:
           an unknown name, or a request to the bare IP, reaches whichever app
           sorts first alphabetically rather than the site you meant.
+
+          A `profile` app can take it too. default_server is a flag nginx puts
+          on each of a virtualHost's listen directives, so it does not matter
+          who wrote them: webStack merges the flag onto the app's own vhost
+          the same way it merges the aliases.
         '';
       };
       database = mkOption {
@@ -568,14 +573,6 @@ in
             message = "webStack: at most one app can set 'default = true'.";
           }
           {
-            assertion = lib.all (a: !a.default || a.kind == "managed") allApps;
-            message = ''
-              webStack: 'default = true' only reaches nginx on a kind = "managed"
-              app, because webStack does not build the virtualHost of a profile.
-              Set default_server in the app's own module instead.
-            '';
-          }
-          {
             assertion = 
               let
                 domains = (map (a: a.domain) allApps)
@@ -649,6 +646,12 @@ in
               ];
             };
           }) (lib.filter (a: a.kind == "profile" && a.tls) (cfg.tunnel.apps ++ cfg.nginx.apps))))
+
+          (listToAttrs (map (app: {
+            name = app.domain;
+            value = { default = true; };
+          }) (lib.filter (a: a.kind == "profile" && a.default)
+                (cfg.tunnel.apps ++ cfg.nginx.apps))))
 
           # A profile app's own module built the vhost, so the aliases go onto
           # it rather than into one of ours.
