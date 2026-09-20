@@ -48,10 +48,27 @@ For each app:
     locations."/" = {
       proxyPass = "http://localhost:<port>";
       proxyWebsockets = true;
+      recommendedProxySettings = true;
     };
   };
 }
 ```
+
+`recommendedProxySettings` is set here rather than left to the host, because without it nginx sends
+`Host: localhost:<port>` and nothing about the original scheme, so the app is told it was reached
+over plain http at a name it does not serve. Two consequences follow, and the second is the one that
+bites silently:
+
+- An app that builds absolute URLs from the request — anything relying on a guessed application root
+  — emits `http://localhost:<port>` links.
+- `aliases` stop meaning anything. The vhost answers on the extra name, but the app cannot tell which
+  of its names the visitor typed, so it sends them back to its single canonical one.
+
+It also changes what a request log records: with the header present the app can log the client
+address instead of the proxy's. Whether it does is the app's choice, not this module's.
+
+The global `services.nginx.recommendedProxySettings` is left alone. This module sets the option on
+the locations it generates and says nothing about vhosts a host writes by hand.
 
 ### 2. Cloudflare Tunnel stack
 

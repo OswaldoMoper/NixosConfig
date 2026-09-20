@@ -30,6 +30,9 @@ let
       locations."/" = {
         proxyPass = "http://localhost:${toString app.port}";
         proxyWebsockets = true;
+        # Without these the app is told it was reached over plain http at
+        # localhost, so it cannot tell which of its names the visitor typed.
+        recommendedProxySettings = true;
       };
     };
   };
