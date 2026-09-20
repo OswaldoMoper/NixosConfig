@@ -17,7 +17,7 @@ Five deltas from the real host. Everything else is the host.
 | --- | --- |
 | One nginx port per vhost, from `vm.portBase` | A VM has no DNS, so `Host` headers cannot tell the vhosts apart |
 | No TLS, no ACME | There is no public name to order a certificate for |
-| Test contents where the agenix secrets go | They are encrypted to the real host's keys |
+| Test **contents** where the agenix secrets go | They are encrypted to the real host's keys. The owner, group and mode are **not** replaced — see below |
 | `root` and the web stack manager get `vm.password` | Their real hashes come from agenix, so otherwise there is no way in |
 | The guest firewall opens the forwarded ports | The real hosts only allow 22, 80 and 443 |
 
@@ -47,6 +47,12 @@ vm.secretValues = {
 ```
 
 Name the ones whose consumer **rejects** an empty value. A `passwordFile` does, deliberately: psql reads an empty password as "clear it", so the unit aborts rather than silently dropping a role's password. Without an entry here, wiring a `passwordFile` makes `postgresql-ensure` fail in the VM by design.
+
+**Only the contents are substituted.** The `owner`, `group` and `mode` each secret declares are applied here exactly as agenix would apply them on the real host, so a consumer that cannot read its own secret fails in the VM too — which is the whole point of having one.
+
+That was not always true, and what it cost is worth stating once. Installing every secret `0444` and skipping the chown made *every* unit able to read *every* secret, so a password file left at agenix's root-only default passed here and failed on the machine: the hook that reconciles a role's password runs as `postgres`, and `postgres` could not open a `root:root 0400` file. The VM's promise is that it is the same configuration; permissions are part of the configuration.
+
+A secret whose declared owner does not exist on the host now fails the VM's activation. That is correct: it would fail the real one too.
 
 And usually a role password has to be named **twice** — once for the `.age` the database reconciles from, once inside the `environmentFile` the app reads. Miss one and the app sends a password the cluster does not have, which reads as "postgres rejects the backend", not as "the test values disagree".
 
