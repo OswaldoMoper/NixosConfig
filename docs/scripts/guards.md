@@ -19,7 +19,7 @@ nix run .#deploy-myNode
 | --- | --- | --- |
 | 1 | is this checkout behind its upstream, and is the tree dirty | findings warn; **exit 2 blocks** |
 | 2 | binary caches on the machine that will **build** | only if a human answers "abort" |
-| 3 | `nix flake check` | yes |
+| 3 | the checks the node names, or `nix flake check` when it names none | yes |
 | 4 | live preconditions | yes |
 | 5 | build the toplevel locally | yes |
 | 6 | ssh access this deploy would remove | a finding warns; **exit 2 blocks** |
@@ -37,6 +37,10 @@ It compares with `git merge-base --is-ancestor "$upstream" HEAD`, so **local com
 **Step 5 builds before touching the machine.** An evaluation or build error should never reach the target, and the built path is what step 8 compares against.
 
 **Step 7 does not trust deploy-rs.** It reports failure on activations that finished — a benign non-zero from a per-user unit reload is enough. So the exit code is recorded and the gate asks the machine directly instead: does `/run/current-system` equal what we built, and does it verify clean? The first question is what distinguishes a false positive from a real rollback. `verify` alone cannot, because the previous generation has its units up too.
+
+**Step 7 also passes `--skip-checks`, and that is not the gate skipping anything.** Step 3 is the checks step. Left to itself deploy-rs runs `nix flake check` on the whole flake a second time, which costs twice over and introduces a failure mode the gate cannot see: a full-flake check evaluates every *other* host in the flake, so a host this deploy has nothing to do with — one pinning an input the caller cannot fetch, say — blocks it. A node that names its checks is stating which ones concern it; without this the statement buys nothing, because the next step runs them all anyway.
+
+What this gives up is the flake-wide evaluation `nix flake check` performs. That is a coverage question, and it belongs to a **named check**, not to the deploy tool: a check that reads every declared host's `config` gives exactly that, and a node that wants it names it. When a node names nothing, step 3 runs `nix flake check` itself and nothing is lost either way.
 
 ### `GATE_SSH_USER`
 
