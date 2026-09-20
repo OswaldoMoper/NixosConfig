@@ -166,8 +166,15 @@ step "7/8 deploy"
 # report failure and attempt a revoke, while the machine finished activating and
 # came up clean. Aborting here left the operator believing a successful deploy
 # had failed, with step 8 never run.
+#
+# --skip-checks because step 3 IS the checks step. Without it deploy-rs runs
+# `nix flake check` on the whole flake again, which costs twice and can fail
+# for a reason that has nothing to do with this host: a full-flake check
+# evaluates every OTHER host too, so one whose input the caller cannot fetch
+# blocks a deploy it is unrelated to. A node that names its checks is saying
+# which ones concern it, and this is what makes that mean something.
 deploy_rc=0
-deploy "${GATE_FLAKE}#${GATE_NODE}" "$@" || deploy_rc=$?
+deploy --skip-checks "${GATE_FLAKE}#${GATE_NODE}" "$@" || deploy_rc=$?
 
 if [ "${GATE_MIGRATE:-0}" = "1" ]; then
   step "7b/8 restore if the major moved"
