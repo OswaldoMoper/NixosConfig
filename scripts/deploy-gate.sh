@@ -213,8 +213,9 @@ fi
 
 if [ "$deploy_rc" -ne 0 ]; then
   printf '\ndeploy exited %s, but the host runs the closure we built and verifies\n' "$deploy_rc" >&2
-  printf 'clean. Read the activation log for a per-user warning before believing\n' >&2
-  printf 'the exit code -- see HALLAZGOS on the 2026-07-07 rollback.\n' >&2
+  printf 'clean. Read the activation log before believing the exit code: a single\n' >&2
+  printf 'per-user warning is enough to make deploy-rs report a finished\n' >&2
+  printf 'activation as failed.\n' >&2
 fi
 
 printf '\ndeploy gate passed for %s\n' "$GATE_NODE"
