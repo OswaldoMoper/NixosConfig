@@ -20,6 +20,44 @@ let
         or (throw "Package '${app.name}' or '${wrapperName}' was not found in the input of ${app.name}")
     else throw "The value provided in 'package' for ${app.name} is not valid.";
 
+  holdingPage = pkgs.writeTextDir "__unavailable.html" ''
+    <!doctype html>
+    <html lang="en">
+    <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta http-equiv="refresh" content="3">
+    <title>Back in a moment</title>
+    <style>
+      html { color-scheme: light dark; }
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center;
+             font: 16px/1.6 system-ui, sans-serif; padding: 16px; }
+      main { max-width: 26rem; text-align: center; }
+      h1 { font-size: 1.25rem; margin: 0 0 .5rem; }
+      p { margin: 0; opacity: .75; }
+    </style>
+    </head>
+    <body>
+    <main>
+      <h1>Back in a moment</h1>
+      <p>This page is being updated and will reload by itself.</p>
+    </main>
+    </body>
+    </html>
+  '';
+
+  holdingConfig = "error_page 502 503 504 =503 /__unavailable.html;";
+
+  holdingLocation = {
+    "= /__unavailable.html" = {
+      root = holdingPage;
+      extraConfig = ''
+        internal;
+        add_header Retry-After 5 always;
+      '';
+    };
+  };
+
   mkVHost = {app, enableACME ? false}: {
     name = app.domain;
     value = {
@@ -27,15 +65,18 @@ let
       inherit (app) default;
       forceSSL = enableACME;
       serverAliases = app.aliases;
-      locations."/" = {
-        # Not "localhost", which resolves to both 127.0.0.1 and [::1]: an app
-        # listening only on IPv4 makes nginx spend a refused connect on half
-        # the requests before it retries the address that works.
-        proxyPass = "http://127.0.0.1:${toString app.port}";
-        proxyWebsockets = true;
-        # Without these the app is told it was reached over plain http at
-        # localhost, so it cannot tell which of its names the visitor typed.
-        recommendedProxySettings = true;
+      extraConfig = holdingConfig;
+      locations = holdingLocation // {
+        "/" = {
+          # Not "localhost", which resolves to both 127.0.0.1 and [::1]: an app
+          # listening only on IPv4 makes nginx spend a refused connect on half
+          # the requests before it retries the address that works.
+          proxyPass = "http://127.0.0.1:${toString app.port}";
+          proxyWebsockets = true;
+          # Without these the app is told it was reached over plain http at
+          # localhost, so it cannot tell which of its names the visitor typed.
+          recommendedProxySettings = true;
+        };
       };
     };
   };
@@ -665,6 +706,16 @@ in
             };
           }) (lib.filter (a: a.kind == "profile" && a.aliases != [ ])
                 (cfg.tunnel.apps ++ cfg.nginx.apps))))
+
+          (listToAttrs (map (app: {
+            name = app.domain;
+            value = {
+              extraConfig = holdingConfig;
+              locations = holdingLocation;
+            };
+          }) (lib.filter (a: a.kind == "profile")
+                (cfg.tunnel.apps ++ cfg.nginx.apps))))
+
           (lib.mapAttrs (_: target: {
             enableACME = true;
             forceSSL = true;
