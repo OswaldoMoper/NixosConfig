@@ -291,6 +291,28 @@ let
           — `z` adjusts a path without recursing — for whatever else differs.
         '';
       };
+      umask = mkOption {
+        type = types.nullOr types.str;
+        default = null;
+        example = "0007";
+        description = ''
+          UMask for the app's unit, which decides what an app that WRITES into
+          a shared directory leaves behind. null keeps whatever the unit
+          already has.
+
+          An app hardened with UMask=0077 creates every file and directory
+          readable by nobody but itself, so a second app reading the same
+          directory is denied — and one that scans that directory at startup
+          does not degrade, it fails to start. The group the two apps share
+          cannot help, because the mode never grants the group anything.
+
+          Set on the app that writes, not on the one that reads, and only as
+          wide as the sharing needs: 0007 keeps everyone outside the group out.
+
+          For kind = "profile" this overrides what the app's own module set,
+          which is the only way to reach it from here.
+        '';
+      };
       aliases = mkOption {
         type = types.listOf types.str;
         default = [ ];
@@ -548,6 +570,16 @@ in
             assertion = lib.any (a: a.database != null) allApps -> config.postgresql.enable;
             message = "webStack: an app declares a database but postgresql.enable is false, so nothing would create it.";
           }
+          {
+            assertion = lib.all (a: a.umask == null || a.kind != "profile" || a.unit != null) allApps;
+            message = ''
+              webStack: ${lib.concatMapStringsSep ", " (a: a.name)
+                (lib.filter (a: a.umask != null && a.kind == "profile" && a.unit == null) allApps)
+              } sets `umask` but is a profile app with no `unit`, and nothing here
+              can derive the unit name from the app name. Name the unit, or the
+              setting would be dropped without a word.
+            '';
+          }
           # Declaring a database is not the same as anything creating it, and
           # `provision = false` is exactly where the two come apart.
           {
@@ -777,6 +809,12 @@ in
           name = app.unit;
           value.stopIfChanged = false;
         }) (lib.filter (a: a.kind == "profile" && a.unit != null)
+              (cfg.tunnel.apps ++ cfg.nginx.apps))))
+
+        (listToAttrs (map (app: {
+          name = if app.kind == "profile" then app.unit else app.name;
+          value.serviceConfig.UMask = lib.mkForce app.umask;
+        }) (lib.filter (a: a.umask != null && (a.kind != "profile" || a.unit != null))
               (cfg.tunnel.apps ++ cfg.nginx.apps))))
       ];
     };
