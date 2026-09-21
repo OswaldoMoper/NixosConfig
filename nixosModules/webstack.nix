@@ -706,6 +706,8 @@ in
               after = [ "network.target" ]
                 ++ lib.optional (app.database != null) "postgresql.service";
               wantedBy = [ "multi-user.target" ];
+
+              stopIfChanged = false;
               environment = app.environment;
               path = app.path;
               serviceConfig = mkMerge [
@@ -719,6 +721,12 @@ in
               ];
             };
           }) (managed (cfg.tunnel.apps ++ cfg.nginx.apps))))
+
+        (listToAttrs (map (app: {
+          name = app.unit;
+          value.stopIfChanged = false;
+        }) (lib.filter (a: a.kind == "profile" && a.unit != null)
+              (cfg.tunnel.apps ++ cfg.nginx.apps))))
       ];
     };
   }
