@@ -28,7 +28,10 @@ let
       forceSSL = enableACME;
       serverAliases = app.aliases;
       locations."/" = {
-        proxyPass = "http://localhost:${toString app.port}";
+        # Not "localhost", which resolves to both 127.0.0.1 and [::1]: an app
+        # listening only on IPv4 makes nginx spend a refused connect on half
+        # the requests before it retries the address that works.
+        proxyPass = "http://127.0.0.1:${toString app.port}";
         proxyWebsockets = true;
         # Without these the app is told it was reached over plain http at
         # localhost, so it cannot tell which of its names the visitor typed.
