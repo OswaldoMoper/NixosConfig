@@ -188,6 +188,38 @@ if [ "$mode" = "verify" ]; then
   done
 fi
 
+# A pending reboot, and only the part of it a reboot actually applies.
+#
+# Comparing /run/booted-system against /run/current-system is the obvious
+# check and it is the wrong one: those two differ after EVERY activation, so
+# it would warn every time and be learned away. What a reboot applies and an
+# activation cannot is the kernel, its initrd and its modules, so those are
+# what get compared.
+#
+# This is a warn: the deploy is not what fixes it, and a human has to pick the
+# moment.
+pending=""
+compared=0
+for part in kernel initrd kernel-modules; do
+  booted="$(sshq "readlink -f /run/booted-system/${part} 2>/dev/null" || true)"
+  current="$(sshq "readlink -f /run/current-system/${part} 2>/dev/null" || true)"
+  [ -n "$booted" ] && [ -n "$current" ] || continue
+  compared=$((compared + 1))
+  if [ "$booted" != "$current" ]; then
+    pending="${pending}${pending:+, }${part}"
+  fi
+done
+# Counting what was compared, because otherwise a host that exposes none of
+# these paths reports the same "ok" as one that matches, and a check that says
+# ok when it could not look is worse than no check.
+if [ -n "$pending" ]; then
+  warn "this host is running an older ${pending} than it is configured with, so it needs a reboot for that to take effect. A service the activation never restarts stays on the version the machine booted with, and nothing else reports that drift"
+elif [ "$compared" -eq 0 ]; then
+  warn "could not read either of /run/booted-system and /run/current-system, so whether this host needs a reboot is unknown"
+else
+  ok "booted kernel, initrd and modules match the configuration (${compared} of 3 comparable)"
+fi
+
 if [ "$fail" -ne 0 ]; then
   printf '\n%s checks FAILED for %s\n' "$mode" "$node" >&2
   exit 1
