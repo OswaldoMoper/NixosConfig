@@ -24,6 +24,75 @@ with lib; {
             The node says what concerns it because the node is what knows.
           '';
         };
+        backup = mkOption {
+          default = null;
+          description = ''
+            A backup taken with cattleServer before this node is deployed, and
+            the gate stops if it does not come back saying it recorded one.
+
+            Null takes none, which is the state every node was in before this
+            existed: the deploy goes ahead with whatever copy happens to exist.
+          '';
+          type = types.nullOr (types.submodule {
+            options = {
+              package = mkOption {
+                type = types.package;
+                description = ''
+                  The cattleServer to run. It comes from the consumer rather
+                  than from here so that a flake which does not back anything
+                  up needs no such input to evaluate.
+                '';
+              };
+              app = mkOption {
+                type = types.str;
+                description = "Name of the application to back up, as its configuration spells it.";
+              };
+              config = mkOption {
+                type = types.str;
+                description = "Path to the cattleServer configuration, on the machine that deploys.";
+              };
+            };
+          });
+        };
+        census = mkOption {
+          default = null;
+          description = ''
+            What to count on the machine before deploying and again after, so
+            the deploy has to account for what it removed.
+
+            It asserts that nothing disappears, and stops when something does.
+            A merge of two tables into one is a legitimate way to lose a name,
+            so the escape is to say which names may go, this once, in
+            GATE_SHRINK_OK -- the deploy that does it is the deploy that knows.
+
+            By name, never by total: a count cannot tell two tables merged from
+            one table lost, and it is the same trap as a test suite guarded by
+            how many tests it has.
+          '';
+          type = types.nullOr (types.submodule {
+            options = {
+              rowsIn = mkOption {
+                type = types.listOf types.str;
+                default = [ ];
+                example = [ "customer" ];
+                description = ''
+                  Tables, in the first declared database, that must not come
+                  out of a deploy with fewer rows than they went in with.
+
+                  Only the ones where losing rows is always wrong. A queue
+                  drains as it is consumed, so listing one would stop a deploy
+                  for doing its job.
+                '';
+              };
+              files = mkOption {
+                type = types.listOf types.str;
+                default = [ ];
+                example = [ "/upload" ];
+                description = "Directories whose entries are counted.";
+              };
+            };
+          });
+        };
         profiles = mkOption {
           default = {};
           type = types.attrsOf (types.submodule {

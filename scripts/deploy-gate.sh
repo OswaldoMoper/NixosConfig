@@ -160,6 +160,28 @@ if [ "${GATE_MIGRATE:-0}" = "1" ]; then
   printf '  dumped to %s (%s bytes)\n' "$GATE_DUMP_LOCAL" "$(wc -c < "$GATE_DUMP_LOCAL")"
 fi
 
+census_before=""
+if [ -n "${GATE_CENSUS:-}" ]; then
+  step "6c/8 what the machine holds now"
+  census_before="$(mktemp)"
+  "$GATE_CENSUS" > "$census_before" || {
+    printf 'could not take a census; nothing was deployed\n' >&2
+    exit 1
+  }
+  printf '  %s line(s) recorded\n' "$(wc -l < "$census_before")"
+fi
+
+# Last, so nothing can abort after it: a copy is only worth taking if the thing
+# it protects against is the next step.
+if [ -n "${GATE_BACKUP_BIN:-}" ]; then
+  step "6d/8 back up before touching anything"
+  "$GATE_BACKUP_BIN" --once "$GATE_BACKUP_APP" "$GATE_BACKUP_CONFIG" || {
+    printf 'the backup did not complete; nothing was deployed\n' >&2
+    printf 'if this is deliberate, say so out loud rather than here\n' >&2
+    exit 1
+  }
+fi
+
 step "7/8 deploy"
 # The exit code is recorded, not obeyed. Measured on 2026-08-25: a per-user
 # activation warning for an account this deploy had just removed made deploy-rs
@@ -216,6 +238,54 @@ fi
 if ! "$GATE_VERIFY"; then
   printf '\nthe host runs the new closure but does not verify clean\n' >&2
   exit 1
+fi
+
+if [ -n "$census_before" ]; then
+  step "8b/8 account for what the deploy removed"
+  # A migration runs as the application starts, so the first look can catch a
+  # schema halfway through one. Only worth a second look when something is
+  # missing, which is the answer that would stop the gate.
+  census_after="$(mktemp)"
+  "$GATE_CENSUS" > "$census_after" || true
+  tables_of() { grep '^table ' "$1" | cut -d' ' -f3 | sort; }
+  gone="$(comm -23 <(tables_of "$census_before") <(tables_of "$census_after") || true)"
+  if [ -n "$gone" ]; then
+    sleep 10
+    "$GATE_CENSUS" > "$census_after" || true
+    gone="$(comm -23 <(tables_of "$census_before") <(tables_of "$census_after") || true)"
+  fi
+
+  appeared="$(comm -13 <(tables_of "$census_before") <(tables_of "$census_after") || true)"
+  [ -n "$appeared" ] && printf '  new: %s\n' "$(echo "$appeared" | tr '\n' ' ')"
+
+  shrank=""
+  while read -r kind what n_before; do
+    case "$kind" in rows|files) ;; *) continue ;; esac
+    n_after="$(grep -E "^${kind} ${what} " "$census_after" | cut -d' ' -f3 || true)"
+    # Either side unreadable means the question was not answered, which is not
+    # the same answer as "fewer", and must not be reported as one.
+    case "$n_before" in ''|*[!0-9]*) continue ;; esac
+    case "$n_after"  in ''|*[!0-9]*) printf '  could not count %s after the deploy\n' "$what"; continue ;; esac
+    if [ "$n_after" -lt "$n_before" ]; then
+      shrank="$shrank $what($n_before->$n_after)"
+    fi
+  done < <(grep -E '^(rows|files) ' "$census_before" || true)
+
+  unaccounted=""
+  for name in $gone $shrank; do
+    bare="${name%%(*}"
+    case " ${GATE_SHRINK_OK:-} " in *" $bare "*) ;; *) unaccounted="$unaccounted $bare" ;; esac
+  done
+  rm -f "$census_before" "$census_after"
+
+  if [ -n "$unaccounted" ]; then
+    printf '\nthe deploy removed things nobody said it would:%s\n' "$unaccounted" >&2
+    printf 'the backup taken in step 6d still has them.\n' >&2
+    printf 'if this was meant -- two tables merged into one, say -- name them in\n' >&2
+    printf 'GATE_SHRINK_OK and run again; the names are what tells a merge from a loss.\n' >&2
+    exit 1
+  fi
+  printf '  nothing disappeared that was not accounted for\n'
 fi
 
 if [ "$deploy_rc" -ne 0 ]; then

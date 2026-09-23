@@ -130,6 +130,34 @@ if [ "$mode" = "pre-deploy" ] && [ -n "${LIVE_RENAMES:-}" ]; then
   fi
 fi
 
+# A census is neither a precondition nor a postcondition: it is what the
+# machine looked like, printed for something else to compare. It asserts
+# nothing, so it never fails.
+if [ "$mode" = "census" ]; then
+  dbs=()
+  if [ -n "${LIVE_DATABASES:-}" ]; then read -ra dbs <<<"$LIVE_DATABASES"; fi
+  first_db="${dbs[0]:-}"
+  for db in ${dbs[@]+"${dbs[@]}"}; do
+    names="$(sshq "sudo -u postgres psql -tAc \"SELECT tablename FROM pg_tables WHERE schemaname='public' ORDER BY tablename\" ${db}" 2>/dev/null || true)"
+    for t in $names; do printf 'table %s %s\n' "$db" "$t"; done
+  done
+
+  rows=()
+  if [ -n "${LIVE_CENSUS_ROWS:-}" ]; then read -ra rows <<<"$LIVE_CENSUS_ROWS"; fi
+  for t in ${rows[@]+"${rows[@]}"}; do
+    n="$(psql_value "'SELECT count(*) FROM ${t}'" "${first_db}")"
+    printf 'rows %s %s\n' "$t" "${n:-unknown}"
+  done
+
+  dirs=()
+  if [ -n "${LIVE_CENSUS_FILES:-}" ]; then read -ra dirs <<<"$LIVE_CENSUS_FILES"; fi
+  for d in ${dirs[@]+"${dirs[@]}"}; do
+    n="$(sshq "ls -A ${d} 2>/dev/null | wc -l" 2>/dev/null | tr -d '[:space:]' || true)"
+    printf 'files %s %s\n' "$d" "${n:-unknown}"
+  done
+  exit 0
+fi
+
 # Postconditions: only true once a deploy has succeeded, so asserting them
 # before one would block the very deploy meant to create them.
 if [ "$mode" = "verify" ]; then
