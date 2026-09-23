@@ -42,10 +42,10 @@ in
           nodes = if cfg ? deployment then cfg.deployment else { };
           apps = if cfg ? webStack then cfg.webStack.tunnel.apps ++ cfg.webStack.nginx.apps else [ ];
           hmUsers = if cfg ? myUsers then lib.filter (n: cfg.myUsers.${n}.home.enable) (lib.attrNames cfg.myUsers) else [ ];
+
+          appUnits = lib.filter (u: u != null) (map unitOf apps);
           units =
-            # Every app, not only the ones webStack builds the unit for: a
-            # profile app's unit was the one nothing verified.
-            lib.filter (u: u != null) (map unitOf apps)
+            appUnits
             ++ map (u: "home-manager-${u}") hmUsers
             # A host whose whole job is CI serves no app and has no home-manager
             # user, so without this its verify step passes while the one thing
@@ -191,6 +191,10 @@ in
                     if (node.census or null) == null then "" else lib.getExe (liveCheck nodeName node "census")
                   )
                 }
+                export GATE_CENSUS_ROWS=${
+                  lib.escapeShellArg (lib.concatStringsSep " " ((node.census or null).rowsIn or [ ]))
+                }
+                export GATE_APP_UNITS=${lib.escapeShellArg (lib.concatStringsSep " " appUnits)}
                 ${lib.optionalString ((node.backup or null) != null) ''
                   export GATE_BACKUP_BIN=${lib.escapeShellArg (lib.getExe node.backup.package)}
                   export GATE_BACKUP_APP=${lib.escapeShellArg node.backup.app}
