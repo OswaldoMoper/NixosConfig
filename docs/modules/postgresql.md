@@ -337,10 +337,11 @@ Two things migrate a major, and both depend on this module to know which one is 
 
 | | |
 | --- | --- |
-| `GATE_MIGRATE=1` with the [deploy gate](../scripts/guards.md) | a remote deploy that means to change the major |
+| a node's `backup` with the [deploy gate](../scripts/guards.md) | a remote deploy that means to change the major: step `6d` copies the database, step `8c` loads it into the new cluster |
+| `GATE_MIGRATE=1` with the [deploy gate](../scripts/guards.md) | the same, for a node without a `backup`, with `pg_dumpall` |
 | `REBUILD_MIGRATE=1` with the [rebuild gate](../scripts/guards.md) | the same, on the machine itself |
 
-Both detect the version change, back up before it and restore after. What they read from here is `postgresql.package`, which is why it is pinned per host and asserted against what the machine really runs — a shared pin would point one host at a stale data directory.
+All three back up before the version change and restore after. What they read from here is `postgresql.package`, which is why it is pinned per host and asserted against what the machine really runs — a shared pin would point one host at a stale data directory.
 
 ## When to use this module
 

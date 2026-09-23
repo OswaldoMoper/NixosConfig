@@ -26,7 +26,7 @@ nix run .#deploy-myNode
 | 7 | deploy | exit code **recorded, not obeyed** |
 | 8 | verify the result | yes |
 
-With `GATE_MIGRATE=1` two more actions appear inside those eight, as `6b` and `7b`. See below.
+A node that declares a `backup` and a `census` gets four more actions inside those eight, as `6c`, `6d`, `8b` and `8c`; a node without a backup gets `6b` and `7b` with `GATE_MIGRATE=1`. See below.
 
 ### Three decisions that are easy to misread
 
@@ -60,9 +60,36 @@ Same fan-out for an ssh config file: the guards run their own `ssh`, so a path o
 
 It exists for CI. OpenSSH resolves `~/.ssh` from the account's home **in passwd** — `/var/empty` for a runner's system user — not from the job's `HOME`, so without it a runner's key is invisible to every guard.
 
+### A copy before, and an account after
+
+A node that declares `deployment.<node>.backup` and `.census` gets four more actions:
+
+| | |
+| --- | --- |
+| `6c/8` | count what the machine holds: the tables of each database by name, the rows of `census.rowsIn`, the entries of `census.files` |
+| `6d/8` | run `cattleServer --once` for the node's application, and **stop if it did not record a copy**. Last before the deploy, so nothing can abort once the copy exists |
+| `8b/8` | count again and compare **by name**, not by total: a count cannot tell two tables merged from one table lost |
+| `8c/8` | put back from that copy what cannot cost anything, count again, and only then decide |
+
+`8c` puts back two things on its own and one thing never:
+
+| What the deploy left | What `8c` does |
+| --- | --- |
+| every `census.rowsIn` table at zero — the database came back **new**, after a major upgrade, say | stops the node's application units, `cattleServer --restore --database --empty <those tables>`, starts them again |
+| entries missing from `census.files` | `cattleServer --restore --uploads`, which puts back only what the machine lacks and replaces nothing |
+| fewer rows, but not none — the database is **behind** | nothing: replacing it loses what was written after the copy. The gate stops and prints the `--restore --database --replace` command that would, for whoever deploys to decide |
+
+A loss that is meant — two tables merged into one — is named in `GATE_SHRINK_OK`, which excuses it this once and keeps `8c` from undoing it:
+
+```bash
+GATE_SHRINK_OK="old_table" nix run .#deploy-myNode
+```
+
+The census counts the top level of each `census.files` directory, so an entry lost further down is not seen, and not put back.
+
 ### `GATE_MIGRATE=1`
 
-For a deploy that **means** to change the PostgreSQL major. It inserts two actions into the same eight steps:
+For a deploy that **means** to change the PostgreSQL major, on a node **without** a `backup`. It inserts two actions into the same eight steps:
 
 | | |
 | --- | --- |
@@ -80,8 +107,12 @@ Three things about where those sit:
 Do **not** use it to recover a machine whose data already sits in the data directory the new config pins: the restore would write over a cluster that is already correct, and the dump would come from whichever cluster happens to be running.
 
 ```bash
-GATE_MIGRATE=1 nix run .#deploy-myNode
+GATE_SKIP_PREFLIGHT=1 GATE_MIGRATE=1 nix run .#deploy-myNode
 ```
+
+`GATE_SKIP_PREFLIGHT=1` goes with it because step 4 refuses a deploy that changes the major; the precondition says so and names this command.
+
+**A node with a backup refuses it**, before step 1. It already has a way through a major upgrade — `6d` copies the database and `8c` loads it into the new cluster — so all it needs is `GATE_SKIP_PREFLIGHT=1`, and two paths would restore the same database twice. What `GATE_MIGRATE` still covers that the backup does not is the whole cluster: `pg_dumpall` carries every database and every role, where a backup carries the application's database, and roles come back only if the configuration declares them.
 
 `GATE_DUMP_DIR` (default `/var/tmp`) and `GATE_DUMP_LOCAL` (default `~/postgres_backup_<node>.sql`) move the two ends.
 

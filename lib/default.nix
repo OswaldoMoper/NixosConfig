@@ -100,6 +100,7 @@ in
                 export LIVE_CENSUS_FILES=${
                   lib.escapeShellArg (lib.concatStringsSep " " ((node.census or null).files or [ ]))
                 }
+                export LIVE_HAS_BACKUP=${if (node.backup or null) != null then "1" else "0"}
 
                 ${builtins.readFile ../scripts/live-checks.sh}
               '';
