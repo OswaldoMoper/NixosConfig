@@ -242,45 +242,114 @@ fi
 
 if [ -n "$census_before" ]; then
   step "8b/8 account for what the deploy removed"
+  census_after="$(mktemp)"
+  tables_of() { grep '^table ' "$1" | cut -d' ' -f3 | sort; }
+
+  # Compares census_before with census_after and leaves the verdict in four
+  # variables: unaccounted (names lost that GATE_SHRINK_OK does not excuse),
+  # lost_db and lost_files (the same names split by where they live), and
+  # db_new (1 when every counted table that had rows now has none -- a
+  # database that came back new rather than behind).
+  account() {
+    local gone shrank name bare kind what n_before n_after watched=0
+    gone="$(comm -23 <(tables_of "$census_before") <(tables_of "$census_after") || true)"
+    shrank=""
+    db_new=1
+    while read -r kind what n_before; do
+      case "$kind" in rows|files) ;; *) continue ;; esac
+      n_after="$(grep -E "^${kind} ${what} " "$census_after" | cut -d' ' -f3 || true)"
+      # Either side unreadable means the question was not answered, which is not
+      # the same answer as "fewer", and must not be reported as one.
+      case "$n_before" in ''|*[!0-9]*) continue ;; esac
+      case "$n_after"  in ''|*[!0-9]*) printf '  could not count %s after the deploy\n' "$what"; db_new=0; continue ;; esac
+      if [ "$kind" = rows ] && [ "$n_before" -gt 0 ]; then
+        watched=1
+        [ "$n_after" -eq 0 ] || db_new=0
+      fi
+      if [ "$n_after" -lt "$n_before" ]; then
+        shrank="$shrank ${kind}:${what}($n_before->$n_after)"
+      fi
+    done < <(grep -E '^(rows|files) ' "$census_before" || true)
+    [ "$watched" = 1 ] || db_new=0
+
+    local lost=""
+    for name in $gone; do lost="$lost table:$name"; done
+    unaccounted=""; lost_db=""; lost_files=""
+    for name in $lost $shrank; do
+      bare="${name#*:}"; bare="${bare%%(*}"
+      case " ${GATE_SHRINK_OK:-} " in *" $bare "*) continue ;; esac
+      unaccounted="$unaccounted $bare"
+      case "$name" in files:*) lost_files="$lost_files $bare" ;; *) lost_db="$lost_db $bare" ;; esac
+    done
+  }
+
   # A migration runs as the application starts, so the first look can catch a
   # schema halfway through one. Only worth a second look when something is
   # missing, which is the answer that would stop the gate.
-  census_after="$(mktemp)"
   "$GATE_CENSUS" > "$census_after" || true
-  tables_of() { grep '^table ' "$1" | cut -d' ' -f3 | sort; }
-  gone="$(comm -23 <(tables_of "$census_before") <(tables_of "$census_after") || true)"
-  if [ -n "$gone" ]; then
+  account
+  if [ -n "$unaccounted" ]; then
     sleep 10
     "$GATE_CENSUS" > "$census_after" || true
-    gone="$(comm -23 <(tables_of "$census_before") <(tables_of "$census_after") || true)"
+    account
   fi
 
   appeared="$(comm -13 <(tables_of "$census_before") <(tables_of "$census_after") || true)"
   [ -n "$appeared" ] && printf '  new: %s\n' "$(echo "$appeared" | tr '\n' ' ')"
 
-  shrank=""
-  while read -r kind what n_before; do
-    case "$kind" in rows|files) ;; *) continue ;; esac
-    n_after="$(grep -E "^${kind} ${what} " "$census_after" | cut -d' ' -f3 || true)"
-    # Either side unreadable means the question was not answered, which is not
-    # the same answer as "fewer", and must not be reported as one.
-    case "$n_before" in ''|*[!0-9]*) continue ;; esac
-    case "$n_after"  in ''|*[!0-9]*) printf '  could not count %s after the deploy\n' "$what"; continue ;; esac
-    if [ "$n_after" -lt "$n_before" ]; then
-      shrank="$shrank $what($n_before->$n_after)"
-    fi
-  done < <(grep -E '^(rows|files) ' "$census_before" || true)
+  restore=()
+  [ -z "${GATE_BACKUP_BIN:-}" ] || restore=("$GATE_BACKUP_BIN" --restore "$GATE_BACKUP_APP")
+  empty_tables="$(printf '%s' "${GATE_CENSUS_ROWS:-}" | tr ' ' ',')"
 
-  unaccounted=""
-  for name in $gone $shrank; do
-    bare="${name%%(*}"
-    case " ${GATE_SHRINK_OK:-} " in *" $bare "*) ;; *) unaccounted="$unaccounted $bare" ;; esac
-  done
+  # Only what cannot lose anything goes back on its own: a database that came
+  # back new, and uploads the machine no longer has. A database that is behind
+  # stops the gate, because replacing it would lose whatever was written after
+  # the copy.
+  if [ ${#restore[@]} -gt 0 ] && { { [ -n "$lost_db" ] && [ "$db_new" = 1 ]; } || [ -n "$lost_files" ]; }; then
+    step "8c/8 put back what the backup in 6d still has"
+    restored=0
+    if [ -n "$lost_db" ] && [ "$db_new" = 1 ] && [ -n "$empty_tables" ]; then
+      printf '  the database came back new (%s at zero), restoring it\n' "$empty_tables"
+      gate_ssh "sudo systemctl stop ${GATE_APP_UNITS:-}" || {
+        printf 'could not stop %s; nothing was restored\n' "${GATE_APP_UNITS:-}" >&2
+        exit 1
+      }
+      db_rc=0
+      "${restore[@]}" --database --empty "$empty_tables" "$GATE_BACKUP_CONFIG" || db_rc=$?
+      gate_ssh "sudo systemctl start ${GATE_APP_UNITS:-}" || printf '  could not start %s again\n' "${GATE_APP_UNITS:-}" >&2
+      [ "$db_rc" -eq 0 ] && restored=1
+    fi
+    if [ -n "$lost_files" ]; then
+      printf '  uploads went missing, putting back the ones the machine lacks\n'
+      "${restore[@]}" --uploads "$GATE_BACKUP_CONFIG" && restored=1
+    fi
+    if [ "$restored" = 1 ]; then
+      sleep 10
+      "$GATE_CENSUS" > "$census_after" || true
+      account
+    fi
+  fi
   rm -f "$census_before" "$census_after"
 
   if [ -n "$unaccounted" ]; then
     printf '\nthe deploy removed things nobody said it would:%s\n' "$unaccounted" >&2
-    printf 'the backup taken in step 6d still has them.\n' >&2
+    if [ ${#restore[@]} -gt 0 ]; then
+      printf 'the backup taken in step 6d still has them.\n' >&2
+      if [ -n "$lost_db" ] && [ "$db_new" = 1 ]; then
+        printf 'the database came back new, but putting it back did not complete. With the\n' >&2
+        printf 'applications stopped (%s), this tries again:\n' "${GATE_APP_UNITS:-}" >&2
+        printf '  %s --database --empty %s %s\n' "${restore[*]}" "$empty_tables" "$GATE_BACKUP_CONFIG" >&2
+      elif [ -n "$lost_db" ]; then
+        printf 'the database is behind rather than new, so it was not replaced: that loses\n' >&2
+        printf 'what was written after the copy, and only whoever deploys can decide it. With\n' >&2
+        printf 'the applications stopped (%s), this replaces it with the copy:\n' "${GATE_APP_UNITS:-}" >&2
+        printf '  %s --database --replace %s\n' "${restore[*]}" "$GATE_BACKUP_CONFIG" >&2
+      fi
+      if [ -n "$lost_files" ]; then
+        printf 'uploads still missing; this puts back the ones the machine lacks:\n' >&2
+        printf '  %s --uploads %s\n' "${restore[*]}" "$GATE_BACKUP_CONFIG" >&2
+      fi
+    fi
     printf 'if this was meant -- two tables merged into one, say -- name them in\n' >&2
     printf 'GATE_SHRINK_OK and run again; the names are what tells a merge from a loss.\n' >&2
     exit 1

@@ -61,6 +61,12 @@ with lib; {
             the deploy has to account for what it removed.
 
             It asserts that nothing disappears, and stops when something does.
+            With a backup declared as well, the two losses that cannot cost
+            anything are put back from it first: a database whose rowsIn tables
+            all came back empty -- new, not behind -- and entries missing from
+            files. A database that is behind is never replaced; the gate stops
+            and prints the command that would.
+
             A merge of two tables into one is a legitimate way to lose a name,
             so the escape is to say which names may go, this once, in
             GATE_SHRINK_OK -- the deploy that does it is the deploy that knows.
@@ -77,7 +83,8 @@ with lib; {
                 example = [ "customer" ];
                 description = ''
                   Tables, in the first declared database, that must not come
-                  out of a deploy with fewer rows than they went in with.
+                  out of a deploy with fewer rows than they went in with. All
+                  of them at zero is what says the database came back new.
 
                   Only the ones where losing rows is always wrong. A queue
                   drains as it is consumed, so listing one would stop a deploy
