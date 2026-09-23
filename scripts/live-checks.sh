@@ -13,6 +13,12 @@ bad() {
 # future deploy on one of those helps nobody.
 warn() { printf '  WARN  %s\n' "$1" >&2; }
 
+# A census writes data to stdout for something else to parse, so its prose
+# goes to stderr instead. Otherwise the reader counts the prose as findings.
+if [ "$mode" = "census" ]; then
+  ok() { printf '  ok    %s\n' "$1" >&2; }
+fi
+
 # Client-side expansion of the remote command is the point here, so SC2029 is
 # excluded where this script is packaged.
 #
@@ -40,7 +46,11 @@ psql_value() {
   sshq "sudo -u postgres psql -tAc $1 ${2:-}" 2>/dev/null | tr -d '[:space:]' || true
 }
 
-printf '%s checks: %s (%s)\n' "$mode" "$node" "$remote"
+if [ "$mode" = "census" ]; then
+  printf '%s checks: %s (%s)\n' "$mode" "$node" "$remote" >&2
+else
+  printf '%s checks: %s (%s)\n' "$mode" "$node" "$remote"
+fi
 
 # BatchMode keeps a missing key from turning this into a password prompt that
 # hangs a pipeline. It also means a passphrase-locked key with no agent loaded

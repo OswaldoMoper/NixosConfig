@@ -168,7 +168,7 @@ if [ -n "${GATE_CENSUS:-}" ]; then
     printf 'could not take a census; nothing was deployed\n' >&2
     exit 1
   }
-  printf '  %s line(s) recorded\n' "$(wc -l < "$census_before")"
+  printf '  %s thing(s) counted\n' "$(grep -cE '^(table|rows|files) ' "$census_before" || true)"
 fi
 
 # Last, so nothing can abort after it: a copy is only worth taking if the thing
