@@ -85,6 +85,18 @@ Turning it off does **not** leave you without a check. The deploy gate asks the 
 
 > Only these two are optional. `lib.mkDeployNodes` emits them **only when non-null**, so a node that leaves them alone produces no attribute at all and deploy-rs keeps its own default.
 
+### `deployment.<node>.checks`
+
+The flake checks the deploy gate builds in its step 3, by name. Empty, the default, runs `nix flake check` on the whole flake. A name that is not a check fails the build, so a typo cannot pass as "nothing to check".
+
+### `deployment.<node>.backup`
+
+`{ package; app; config; }`: the cattleServer to run, the application in its configuration, and the path of that configuration **on the machine that deploys**. The gate runs `cattleServer --once` before deploying and stops if no copy was recorded. The package comes from the consumer, so a flake that backs nothing up does not need the input to evaluate. Null, the default, takes no copy.
+
+### `deployment.<node>.census`
+
+`{ rowsIn; files; }`: tables whose rows must not drop, and directories whose entries are counted. The gate counts before and after the deploy and stops when something disappeared that `GATE_SHRINK_OK` does not name. With a `backup` as well it first puts back what cannot cost anything — a database whose `rowsIn` tables all came back empty, and entries missing from `files` — and never replaces a database that is merely behind. Only list tables where losing rows is always wrong: a queue drains by being consumed.
+
 ## How the flake processes deployments
 
 1. Each host may define zero or more `deployment.<node>` entries.
@@ -156,8 +168,9 @@ The gate that [`lib.mkPreDeployApps`](../scripts/guards.md) generates relies on 
 - it reads `deploy.nodes.<node>.hostname`
 - it reads `deploy.nodes.<node>.profiles.system.sshUser`
 - it reads the activation path
+- it reads `checks`, `backup` and `census`, which decide step 3, step `6d` and steps `6c`, `8b` and `8c`
 
-So this module is what makes both a plain deploy and a `GATE_MIGRATE=1` one — the PostgreSQL-safe kind — possible at all.
+So this module is what makes a plain deploy, a PostgreSQL major upgrade through the backup, and a `GATE_MIGRATE=1` one for a node without a backup possible at all.
 
 ## When to use this module
 

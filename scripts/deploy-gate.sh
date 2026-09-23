@@ -43,6 +43,16 @@ remote_major() {
 GATE_DUMP_DIR="${GATE_DUMP_DIR:-/var/tmp}"
 GATE_DUMP_LOCAL="${GATE_DUMP_LOCAL:-${HOME}/postgres_backup_${GATE_NODE}.sql}"
 
+# A node with a backup already has a way through a major upgrade -- 6d copies,
+# 8c loads the copy into the new cluster -- and two would restore the same
+# database twice.
+if [ "${GATE_MIGRATE:-0}" = "1" ] && [ -n "${GATE_BACKUP_BIN:-}" ]; then
+  printf 'GATE_MIGRATE is for a node without a backup, and %s declares one:\n' "$GATE_NODE" >&2
+  printf 'for a major upgrade GATE_SKIP_PREFLIGHT=1 is enough -- step 6d copies the\n' >&2
+  printf 'database and step 8c loads it into the new cluster. Nothing was deployed.\n' >&2
+  exit 1
+fi
+
 step "1/8 is this checkout current"
 # First because it is the cheapest and because every later step inherits its
 # answer: a stale tree's own checks are stale too.
@@ -131,7 +141,8 @@ fi
 # early enough that the machine is still serving the old cluster.
 #
 # It lives here rather than in a script of its own because a parallel path ran
-# none of the six steps above, and drifted.
+# none of the six steps above, and drifted. Only for a node without a backup,
+# which is refused above otherwise.
 migrate_before=""
 if [ "${GATE_MIGRATE:-0}" = "1" ]; then
   step "6b/8 dump before migrating"

@@ -97,7 +97,11 @@ if [ "$mode" = "pre-deploy" ] && [ -n "${LIVE_PG_MAJOR:-}" ]; then
       if [ "$target" = "$LIVE_PG_MAJOR" ]; then
         bad "postgres major is ${live} but the config pins ${LIVE_PG_MAJOR}, and ${LIVE_DATA_DIR} already holds a version ${target} cluster: deploying switches to that one and orphans whatever the live ${live} cluster holds"
       else
-        bad "postgres major is ${live} but the config pins ${LIVE_PG_MAJOR}, and ${LIVE_DATA_DIR} holds no cluster: deploying would start an empty one. Re-run with GATE_MIGRATE=1, which dumps first"
+        if [ "${LIVE_HAS_BACKUP:-0}" = "1" ]; then
+          bad "postgres major is ${live} but the config pins ${LIVE_PG_MAJOR}, and ${LIVE_DATA_DIR} holds no cluster: deploying starts an empty one. This node declares a backup, so re-run with GATE_SKIP_PREFLIGHT=1: step 6d copies the database and step 8c loads it into the new cluster"
+        else
+          bad "postgres major is ${live} but the config pins ${LIVE_PG_MAJOR}, and ${LIVE_DATA_DIR} holds no cluster: deploying would start an empty one. Re-run with GATE_SKIP_PREFLIGHT=1 GATE_MIGRATE=1, which dumps the cluster first and restores it into the new one"
+        fi
       fi
     fi
   fi

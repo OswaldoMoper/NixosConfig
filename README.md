@@ -13,7 +13,7 @@ A modular NixOS configuration supporting multiple users, applications, and hosts
 - [🖥️ Declaring hosts (multihost)](#️-declaring-hosts)
 - [🧩 Declaring apps (multiapp)](#-declaring-apps)
 - [🚀 Deployment](#-deploying-to-remote-servers-deploy-rs)
-- [🐘 Deployment + Migration](#-postgresql-migration-gate_migrate)
+- [🐘 Deployment + Migration](#-postgresql-migration)
 - [🔧 System rebuild](#-system-rebuild)
 - [📚 Documentation](#-documentation)
 - [🧠 Notes](#-notes)
@@ -353,16 +353,17 @@ Step 1 is first because it is cheap and because every later step inherits its an
 
 `GATE_SSH_CONFIG=<path>` does the same for an ssh config file, reaching the guards and `deploy --ssh-opts` alike. It exists because OpenSSH resolves `~/.ssh` from the account's home in passwd — `/var/empty` for a CI runner's system user — not from the job's `HOME`.
 
-## 🐘 PostgreSQL migration (GATE_MIGRATE)
+## 🐘 PostgreSQL migration
 
-A deploy that **means** to change the PostgreSQL major runs through the same gate, with two extra actions:
+A deploy that **means** to change the PostgreSQL major runs through the same gate. Step 4 refuses it until you say so, and what else it takes depends on whether the node declares a `backup`:
 
 ```bash
-GATE_MIGRATE=1 nix run .#deploy-myNode
+GATE_SKIP_PREFLIGHT=1 nix run .#deploy-myNode                 # a node with a backup
+GATE_SKIP_PREFLIGHT=1 GATE_MIGRATE=1 nix run .#deploy-myNode  # a node without one
 ```
 
-- `6b/8` — read the live major, dump the remote cluster, **download it**, and refuse to continue unless the file really is `pg_dumpall` output
-- `7b/8` — read the major again, and restore only if it went **up**
+- **With a backup**, `6d` copies the database before the deploy and `8c` loads it into the new, empty cluster after. `GATE_MIGRATE=1` is refused there: it would restore the same database twice.
+- **Without one**, `GATE_MIGRATE=1` adds `6b/8` — read the live major, dump the remote cluster, **download it**, and refuse to continue unless the file really is `pg_dumpall` output — and `7b/8` — read the major again, and restore only if it went **up**.
 
 There is deliberately no separate command. A path beside the gate runs none of its checks, and drifts from them — see [the gate and its guards](./docs/scripts/guards.md).
 
