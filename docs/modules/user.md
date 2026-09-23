@@ -60,6 +60,8 @@ This module acts as a **wrapper** for the standard NixOS `users.users.<name>` op
 
 - **Automatic Defaults**: When `enable = true`, the module automatically configures the user as a `isNormalUser`, sets `zsh` as the shell, and adds essential groups (`wheel`, `networkmanager`, etc.).
 - **Native Pass-through**: Any attribute defined inside the `native` block is passed directly to the underlying NixOS user configuration. This allows you to use 100% of NixOS native features without limitations.
+- **Merged, not replaced**: `native` is merged the way NixOS merges any two definitions. A list adds to the defaults — `native.extraGroups = [ "uploads" ]` gives the essential groups **and** `uploads` — and a value such as `shell` or `isNormalUser` set in `native` wins over the default. The defaults sit just above NixOS's own `mkDefault`, so they beat `users.defaultUserShell` without fighting anything a host declares.
+- **`baseGroups`** are those essential groups, `networkmanager`, `wheel`, `video` and `audio` by default. Setting it replaces them, which is how a user stays out of `wheel`: `baseGroups = [ "video" "audio" ];`. `lib.mkForce` inside `native` does not do this — `native` is a freeform set, and the priority is lost on the way through.
 
 ## Home Manager Integration
 

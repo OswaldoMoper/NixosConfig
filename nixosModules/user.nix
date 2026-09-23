@@ -1,7 +1,7 @@
 { config, pkgs, lib, options, ... }:
 
 let
-  inherit (lib) mkIf mkOption mkEnableOption types mapAttrs optionalString concatStringsSep recursiveUpdate;
+  inherit (lib) mkIf mkMerge mkOverride mkOption mkEnableOption types mapAttrs optionalString concatStringsSep;
 
   outOfStoreLink = name: path:
     pkgs.runCommandLocal name { } "ln -s ${lib.escapeShellArg path} $out";
@@ -28,7 +28,20 @@ in
             freeformType = types.attrsOf types.unspecified;
           };
           default = {};
-          description = "Natives options of NixOS users.users";
+          description = ''
+            Options of NixOS users.users, merged the way NixOS merges them: a
+            list such as extraGroups adds to baseGroups rather than replacing them,
+            and a value set here wins over the defaults (isNormalUser, shell).
+          '';
+        };
+        baseGroups = mkOption {
+          type = types.listOf types.str;
+          default = [ "networkmanager" "wheel" "video" "audio" ];
+          description = ''
+            Groups this user starts with, before native.extraGroups adds to
+            them. Setting it replaces them: a user who should not be in wheel
+            lists the others without it.
+          '';
         };
 
         enable = mkEnableOption "Enable this user";
@@ -187,14 +200,16 @@ in
         }
       ]) config.myUsers);
 
+    # Above the mkDefault NixOS gives its own defaults, below anything a host sets.
     users.users = mapAttrs (name: cfg:
-      mkIf cfg.enable (
-        recursiveUpdate {
-        isNormalUser = true;
-        shell = pkgs.zsh;
-        extraGroups = [ "networkmanager" "wheel" "video" "audio" ];
-      } cfg.native
-      )
+      mkIf cfg.enable (mkMerge [
+        {
+          isNormalUser = mkOverride 900 true;
+          shell = mkOverride 900 pkgs.zsh;
+          extraGroups = cfg.baseGroups;
+        }
+        cfg.native
+      ])
     ) config.myUsers;
     environment.systemPackages = with pkgs; [ direnv any-nix-shell ];
 
