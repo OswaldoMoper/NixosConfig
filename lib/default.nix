@@ -94,6 +94,12 @@ in
                 export LIVE_DATABASES=${lib.escapeShellArg (lib.concatStringsSep " " databases)}
                 export LIVE_DB_OWNERS=${lib.escapeShellArg (lib.concatStringsSep " " owners)}
                 export LIVE_RENAMES=${lib.escapeShellArg (lib.concatStringsSep " " renames)}
+                export LIVE_CENSUS_ROWS=${
+                  lib.escapeShellArg (lib.concatStringsSep " " ((node.census or null).rowsIn or [ ]))
+                }
+                export LIVE_CENSUS_FILES=${
+                  lib.escapeShellArg (lib.concatStringsSep " " ((node.census or null).files or [ ]))
+                }
 
                 ${builtins.readFile ../scripts/live-checks.sh}
               '';
@@ -180,6 +186,16 @@ in
                 export GATE_ACCESS=${lib.getExe (accessGuard nodeName node)}
                 export GATE_VERIFY=${lib.getExe (liveCheck nodeName node "verify")}
                 export GATE_CHECKS=${lib.escapeShellArg (lib.concatStringsSep " " (node.checks or [ ]))}
+                export GATE_CENSUS=${
+                  lib.escapeShellArg (
+                    if (node.census or null) == null then "" else lib.getExe (liveCheck nodeName node "census")
+                  )
+                }
+                ${lib.optionalString ((node.backup or null) != null) ''
+                  export GATE_BACKUP_BIN=${lib.escapeShellArg (lib.getExe node.backup.package)}
+                  export GATE_BACKUP_APP=${lib.escapeShellArg node.backup.app}
+                  export GATE_BACKUP_CONFIG=${lib.escapeShellArg node.backup.config}
+                ''}
 
                 ${builtins.readFile ../scripts/deploy-gate.sh}
               '';
