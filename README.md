@@ -116,6 +116,7 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
 │   ├── user.nix                     ← multiuser module
 │   ├── vm.nix                       ← every host as a local QEMU machine
 │   ├── vscode.nix                   ← `code` from any shell, not only VS Code's
+│   ├── watcher.nix                  ← is each served name up, and which part is not
 │   └── webstack.nix
 ├── scripts/
 │   ├── access-guard.sh              ← ssh logins a deploy would take away
@@ -399,6 +400,7 @@ Full documentation is available in the [`/docs/`](./docs/) directory:
 - [VS Code remote CLI](./docs/modules/vscode.md)
 - [Hosts](./docs/hosts.md)
 - [Web stack](./docs/modules/webstack.md)
+- [Watcher](./docs/modules/watcher.md)
 - [PostgreSQL](./docs/modules/postgresql.md)
 - [Deployment](./docs/modules/deployment.md)
 - [The two gates and their guards](./docs/scripts/guards.md)

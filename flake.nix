@@ -40,6 +40,7 @@
         (import ./nixosModules/deployment.nix)
         (import ./nixosModules/vscode.nix)
         (import ./nixosModules/vm.nix)
+        (import ./nixosModules/watcher.nix)
       ];
     hostDir = ./hosts;
     mkHost = hostName: nixpkgs.lib.nixosSystem {
