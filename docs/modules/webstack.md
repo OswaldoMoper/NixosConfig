@@ -337,6 +337,10 @@ The module accepts:
 
 The wrapper is resolved automatically.
 
+## Watching the names it serves
+
+Where the [`watcher`](./watcher.md) module is imported, every `domain`, alias and redirect of `nginx.apps`, and every name in `nginx.redirects`, is added to `watcher.sites`. It is the same relation as with `postgresql.ensure`: webStack writes into the other module's option, and the host decides whether that module is on.
+
 ## Systemd Services
 
 Each **`managed`** app (of nginx or tunnel) generates a service. `profile` apps do not:

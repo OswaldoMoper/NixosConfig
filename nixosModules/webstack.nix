@@ -526,7 +526,7 @@ in
       };
     };
 
-    config = mkIf cfg.enable {
+    config = mkMerge [ (mkIf cfg.enable {
       # `options ? age` guards the attribute so a host without agenix still
       # evaluates, which is how the app modules guard theirs.
       age = lib.mkIf (options ? age) {
@@ -817,5 +817,15 @@ in
         }) (lib.filter (a: a.umask != null && (a.kind != "profile" || a.unit != null))
               (cfg.tunnel.apps ++ cfg.nginx.apps))))
       ];
-    };
+    })
+
+    # Every name this stack serves, for the watcher to watch; written only
+    # where the watcher module is imported, as age is only where agenix is.
+    (lib.optionalAttrs (options ? watcher) {
+      watcher.sites = mkIf cfg.enable (lib.genAttrs
+        (lib.concatMap (a: [ a.domain ] ++ a.aliases ++ a.redirects) cfg.nginx.apps
+          ++ lib.attrNames cfg.nginx.redirects)
+        (_: { }));
+    })
+    ];
   }
