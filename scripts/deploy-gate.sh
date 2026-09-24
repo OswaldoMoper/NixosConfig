@@ -67,6 +67,15 @@ if [ "$fresh_rc" -eq 2 ]; then
   exit 1
 fi
 
+step "1b/8 which pins move since the revision the machine runs"
+# An application moves in its own deploy. Unlike freshness, both a finding and
+# "could not ask" stop here: the one time an app moved unnoticed it went out
+# without its rehearsal.
+"$GATE_PINS" || {
+  printf '\nnothing was deployed\n' >&2
+  exit 1
+}
+
 step "2/8 binary caches on this machine"
 # Only a human answering "abort" makes this stop.
 "$GATE_CACHES" || {

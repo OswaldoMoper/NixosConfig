@@ -378,7 +378,7 @@ The very first rebuild, before this flake has generated anything:
   sudo nixos-rebuild switch --flake .#<hostname>
 ```
 
-After that, prefer the gate. It is the **same** eight steps and the same four guards as a deploy, running against the machine you are on:
+After that, prefer the gate. It is the **same** eight steps and the same guards as a deploy, but for the one comparing pins, running against the machine you are on:
 
 ```bash
   sudo nix run .#rebuild-<hostname>                 # switch, the default

@@ -140,6 +140,30 @@ in
               '';
             };
 
+          pinsGuard =
+            nodeName: node:
+            pkgs.writeShellApplication {
+              name = "pre-deploy-${nodeName}-pins";
+              runtimeInputs = with pkgs; [
+                coreutils
+                git
+                gnugrep
+                jq
+                openssh
+              ];
+              text = ''
+                : "''${PINS_FLAKE:=''${GATE_FLAKE:-.}}"
+                : "''${PINS_HOST:=${node.hostname}}"
+                : "''${PINS_SSH_USER:=''${GATE_SSH_USER:-${sshUserOf node}}}"
+                : "''${PINS_SSH_CONFIG:=''${GATE_SSH_CONFIG:-}}"
+                export PINS_FLAKE PINS_HOST PINS_SSH_USER PINS_SSH_CONFIG
+                export PINS_NODE=${lib.escapeShellArg nodeName}
+                export PINS_APPS=${lib.escapeShellArg (lib.concatStringsSep " " (node.appInputs or [ ]))}
+
+                ${builtins.readFile ../scripts/pins-guard.sh}
+              '';
+            };
+
           cacheGuard =
             nodeName:
             pkgs.writeShellApplication {
@@ -182,6 +206,7 @@ in
                 export GATE_HOST_ADDR=${lib.escapeShellArg node.hostname}
                 export GATE_HOST_USER="''${GATE_SSH_USER:-${sshUserOf node}}"
                 export GATE_FRESH=${lib.getExe (freshnessGuard nodeName)}
+                export GATE_PINS=${lib.getExe (pinsGuard nodeName node)}
                 export GATE_CACHES=${lib.getExe (cacheGuard nodeName)}
                 export GATE_PRE_DEPLOY=${lib.getExe (liveCheck nodeName node "pre-deploy")}
                 export GATE_ACCESS=${lib.getExe (accessGuard nodeName node)}
@@ -289,6 +314,17 @@ in
             }
           ) nodes;
 
+          pinsApps = lib.mapAttrs' (
+            nodeName: node:
+            let
+              pkg = pinsGuard nodeName node;
+            in
+            lib.nameValuePair pkg.name {
+              type = "app";
+              program = lib.getExe pkg;
+            }
+          ) nodes;
+
           gateApps = lib.mapAttrs' (
             nodeName: node:
             lib.nameValuePair "deploy-${nodeName}" {
@@ -301,6 +337,7 @@ in
         // accessApps
         // cacheApps
         // freshApps
+        // pinsApps
         // {
           "rebuild-${hostName}" = {
             type = "app";
