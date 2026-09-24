@@ -24,6 +24,19 @@ with lib; {
             The node says what concerns it because the node is what knows.
           '';
         };
+        appInputs = mkOption {
+          type = types.listOf types.str;
+          default = [ ];
+          example = [ "myApp" ];
+          description = ''
+            Flake inputs that are applications, which move in a deploy of their
+            own. The gate compares the lock against the one of the revision the
+            machine runs, and stops when one of these moved without being named
+            in GATE_PIN_OK; any other input that moved is only reported.
+
+            Empty skips the comparison.
+          '';
+        };
         backup = mkOption {
           default = null;
           description = ''

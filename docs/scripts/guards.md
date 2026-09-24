@@ -1,6 +1,6 @@
-# The two gates and their four guards
+# The two gates and their guards
 
-`freshness-guard.sh`, `cache-guard.sh`, `access-guard.sh` and `live-checks.sh` each answer one question. Two scripts orchestrate them:
+`freshness-guard.sh`, `pins-guard.sh`, `cache-guard.sh`, `access-guard.sh` and `live-checks.sh` each answer one question. Two scripts orchestrate them:
 
 | | Generated | For |
 | --- | --- | --- |
@@ -18,6 +18,7 @@ nix run .#deploy-myNode
 | # | Step | Blocks? |
 | --- | --- | --- |
 | 1 | is this checkout behind its upstream, and is the tree dirty | findings warn; **exit 2 blocks** |
+| 1b | which inputs moved since the revision the machine runs | an application input nobody named, and **exit 2**, block |
 | 2 | binary caches on the machine that will **build** | only if a human answers "abort" |
 | 3 | the checks the node names, or `nix flake check` when it names none | yes |
 | 4 | live preconditions | yes |
@@ -120,6 +121,29 @@ GATE_SKIP_PREFLIGHT=1 GATE_MIGRATE=1 nix run .#deploy-myNode
 
 An explicit escape, because a gate without one gets bypassed by hand and stops being a gate. It exists for a known-intentional precondition mismatch. Whoever uses it next owes a reason.
 
+### `GATE_PIN_OK` — an application moves in its own deploy
+
+```nix
+deployment.myNode.appInputs = [ "myApp" ];
+```
+
+```bash
+GATE_PIN_OK='myApp' nix run .#deploy-myNode
+```
+
+A deploy that changes the machine and a deploy that changes an application are two deploys: together, whatever breaks has two suspects on a machine people are using. Keeping them apart used to depend on whoever deployed reading every `rev` of the lock, and a lock update made for one input can move another without anyone asking for it.
+
+Step 1b asks the machine which revision of the flake it runs (`nixos-version --configuration-revision`), reads that revision's `flake.lock` from the checkout, and compares every input of the root with the lock about to be deployed:
+
+| What moved | Step 1b |
+| --- | --- |
+| an input in `appInputs`, not named in `GATE_PIN_OK` | **stops**, naming the input and both revisions |
+| an input in `appInputs`, named | reports it and goes on |
+| any other input — nixpkgs, this library | reports it and goes on: moving with the machine is what they do |
+| nothing | goes on |
+
+It **also stops when it could not ask**: the machine did not answer, or says no revision — a deploy from a dirty tree records none —, or the checkout lacks the revision it names, or `appInputs` names an input the flake does not have. Empty `appInputs` skips the step, which is where every node starts. Run it on its own with `nix run .#pre-deploy-<node>-pins`; it only reads.
+
 ---
 
 ## The rebuild gate — `rebuild-gate.sh`
@@ -130,7 +154,7 @@ sudo nix run .#rebuild-myHost -- test         # activate without touching the bo
 sudo nix run .#rebuild-myHost -- boot dry-run # any nixos-rebuild args follow the mode
 ```
 
-The same eight steps and the same four guards. Seven of them apply unchanged; `REBUILD_MIGRATE=1` inserts the same `6b`/`7b` pair, reading and restoring locally.
+The same eight steps and the same guards but one: the pins guard asks what a remote machine runs, and here the machine is the one you are on. Seven of the steps apply unchanged; `REBUILD_MIGRATE=1` inserts the same `6b`/`7b` pair, reading and restoring locally.
 
 ### Why it is a second gate and not a flag
 

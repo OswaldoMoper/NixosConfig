@@ -53,7 +53,7 @@ Worth knowing before trusting a green check on a change to `lib/` or a module.
 | --- | --- |
 | `nixosModules/` | the product: options other flakes consume |
 | `lib/` | `nixFilesIn`, `mkDeployNodes`, `mkPreDeployApps`, `mkVmApps`, `mkLocalRunApps` |
-| `scripts/` | the two gates, their four guards, and the database rename |
+| `scripts/` | the two gates, their guards, and the database rename |
 | `hosts/` | this repo's own machines — currently one |
 | `hmProfiles/` | per-user Home Manager profiles; searched via `hmProfiles.dirs`, and a consumer's own directory wins |
 
