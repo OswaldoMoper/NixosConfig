@@ -70,6 +70,19 @@ in
         any, which leaves a name pointed somewhere else unnoticed.
       '';
     };
+    settingsFile = mkOption {
+      type = types.nullOr types.str;
+      default = null;
+      example = "/run/agenix/watcher-config";
+      description = ''
+        Path on the machine to cattleServer's whole configuration, for a watch
+        whose names, addresses and alert are themselves a secret. It replaces
+        sites, hostAddresses, machineAddress, controls and alert, which must be
+        left unset, and services.cattleServer.settings. Its alert command
+        finds msmtp, sed and cat on the unit's PATH, never in the store: a store
+        path inside a secret keeps nothing alive.
+      '';
+    };
     machineAddress = mkOption {
       type = types.str;
       default = "127.0.0.1";
@@ -137,11 +150,25 @@ in
           assertion = cfg.alert.passwordFile == null || cfg.alert.recipientsFile != null;
           message = "watcher.alert.passwordFile is only read with alert.recipientsFile.";
         }
+        {
+          assertion =
+            cfg.settingsFile == null
+            || (watched == { } && cfg.alert.recipientsFile == null && cfg.alertCommand == null && cfg.controls == [ ]);
+          message = "watcher.settingsFile holds the whole watch, so sites, controls, alert and alertCommand would be ignored: leave them unset (a webStack app on this host adds its names to sites).";
+        }
       ];
     }
 
+    (lib.optionalAttrs (options ? services.cattleServer) (mkIf (cfg.enable && cfg.settingsFile != null) {
+      services.cattleServer = {
+        enable = true;
+        inherit (cfg) settingsFile;
+      };
+      systemd.services.cattleServer.path = [ pkgs.msmtp pkgs.gnused pkgs.coreutils ];
+    }))
+
     (lib.optionalAttrs (options ? services.cattleServer) {
-      services.cattleServer = mkIf cfg.enable {
+      services.cattleServer = mkIf (cfg.enable && cfg.settingsFile == null) {
         enable = true;
         settings = {
           localHost = {
