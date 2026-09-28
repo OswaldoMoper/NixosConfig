@@ -34,6 +34,7 @@ watcher = {
 | `controls` | URLs of sites that are not watched, asked first. When none answers, the pass logs `Cannot look`, judges nothing and leaves every count of bad checks alone. Empty by default; set, it needs a cattleServer that knows `controls` |
 | `alert.recipientsFile` | a file of mail headers naming who is alerted, and nothing else. With it the module writes the alert command itself, through the system's msmtp account |
 | `alert.passwordFile` | the SMTP password for that account, when the one in its configuration is not readable by the service user |
+| `settingsFile` | a secret holding cattleServer's whole configuration, for a watch whose names and addresses are secret too. Replaces every option above and `services.cattleServer.settings`; see below |
 | `alertCommand` | any other shell command, run once a name has failed its checks, with the detail on standard input. Null only logs. Excludes `alert.recipientsFile` |
 
 ## Who is alerted, and why the list is a file
@@ -45,6 +46,14 @@ The subject names the machine that looked, then the URL and the verdict (`[watch
 `sites` is an ordinary typed option, so it merges and overrides the NixOS way: a host adds to what webStack wrote, `sites."x".enable = false` removes one, and `lib.mkForce { … }` replaces the lot. A misspelt name in `sites` is not silently ignored: it becomes a name of its own, which fails to resolve on the first pass and says so.
 
 The cadence is cattleServer's own, `services.cattleServer.settings.checkEvery`, and so is how many consecutive failures raise an alert.
+
+## The whole watch as a secret
+
+`settingsFile` hands cattleServer a configuration that never enters the store, through its own `services.cattleServer.settingsFile`, which arrives as a systemd credential. Everything the other options would render goes inside it — the sites, the addresses, `controls`, the cadence and the alert command — so they must be left unset, and an assertion says so. A webStack app on the same host adds its names to `sites`, which trips that assertion: such a host watches with the ordinary options.
+
+The alert command inside the file calls `msmtp`, `sed` and `cat` **by name**, and the module puts them on the unit's `PATH`. A store path written into a secret keeps nothing alive, so after the next collection the command would point at nothing and the alert would fail at the one moment it matters. The mail account can travel the same way, as an `msmtprc` passed with `msmtp -C`.
+
+The file is best produced rather than written: declare the watch with the ordinary options on a scratch copy of the host, read `services.cattleServer.settings` as JSON, point its `alertCommand` at bare names, and encrypt the result.
 
 ## This library does not bring cattleServer
 
