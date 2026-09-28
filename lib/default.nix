@@ -62,6 +62,9 @@ in
           renames = map (r: "${r.from}=${r.to}") (
             lib.optionals (cfg ? postgresql && cfg.postgresql.enable) cfg.postgresql.renames
           );
+          roleRenames = map (r: "${r.from}=${r.to}") (
+            lib.optionals (cfg ? postgresql && cfg.postgresql.enable) cfg.postgresql.roleRenames
+          );
           pg = cfg.services.postgresql;
 
           liveCheck =
@@ -94,6 +97,7 @@ in
                 export LIVE_DATABASES=${lib.escapeShellArg (lib.concatStringsSep " " databases)}
                 export LIVE_DB_OWNERS=${lib.escapeShellArg (lib.concatStringsSep " " owners)}
                 export LIVE_RENAMES=${lib.escapeShellArg (lib.concatStringsSep " " renames)}
+                export LIVE_ROLE_RENAMES=${lib.escapeShellArg (lib.concatStringsSep " " roleRenames)}
                 export LIVE_CENSUS_ROWS=${
                   lib.escapeShellArg (lib.concatStringsSep " " ((node.census or null).rowsIn or [ ]))
                 }

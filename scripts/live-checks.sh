@@ -115,32 +115,40 @@ if [ "$mode" = "pre-deploy" ] && [ -n "${LIVE_PG_MAJOR:-}" ]; then
   fi
 fi
 
-# Both names existing is the one state postgresql.renames refuses to resolve,
-# and it refuses it halfway through an activation. Asking here costs two
-# queries and moves that discovery to before anything has been touched.
-if [ "$mode" = "pre-deploy" ] && [ -n "${LIVE_RENAMES:-}" ]; then
-  read -ra renames <<<"$LIVE_RENAMES"
+# Both names existing is the one state postgresql.renames and roleRenames refuse
+# to resolve, and they refuse it halfway through an activation. Asking here costs
+# two queries per pair and moves that discovery to before anything is touched.
+#   check_renames <what> <catalog> <name column> <pairs>
+check_renames() {
+  local what="$1" catalog="$2" column="$3" pair from to has_from has_to
+  local -a pairs
+  read -ra pairs <<<"$4"
+  for pair in "${pairs[@]}"; do
+    from="${pair%%=*}"
+    to="${pair#*=}"
+    has_from="$(psql_value "\"SELECT 1 FROM ${catalog} WHERE ${column}='${from}'\"")"
+    has_to="$(psql_value "\"SELECT 1 FROM ${catalog} WHERE ${column}='${to}'\"")"
+    if [ "$has_from" = "1" ] && [ "$has_to" = "1" ]; then
+      bad "both ${what}s ${from} and ${to} exist, so the rename cannot tell which one is in use: settle it by hand before deploying"
+    elif [ "$has_from" = "1" ]; then
+      ok "${what} ${from} is there and will be renamed to ${to}"
+    elif [ "$has_to" = "1" ]; then
+      ok "${what} ${to} is already renamed"
+    else
+      warn "neither ${what} ${from} nor ${to} exists, so the rename will do nothing and ${to} will be created empty"
+    fi
+  done
+}
+
+if [ "$mode" = "pre-deploy" ] && [ -n "${LIVE_RENAMES:-}${LIVE_ROLE_RENAMES:-}" ]; then
   # A server that is not answering says "no such database" to everything, which
   # here would read as "nothing to rename" -- the one answer that needs no
   # attention. Establish it is answering before believing any of them.
   if [ "$(psql_value "'SELECT 1'")" != "1" ]; then
-    bad "postgres is not answering, so nothing here can say which databases the rename would find"
+    bad "postgres is not answering, so nothing here can say what the renames would find"
   else
-    for pair in "${renames[@]}"; do
-      from="${pair%%=*}"
-      to="${pair#*=}"
-      has_from="$(psql_value "\"SELECT 1 FROM pg_database WHERE datname='${from}'\"")"
-      has_to="$(psql_value "\"SELECT 1 FROM pg_database WHERE datname='${to}'\"")"
-      if [ "$has_from" = "1" ] && [ "$has_to" = "1" ]; then
-        bad "both ${from} and ${to} exist, so the rename cannot tell which holds the data: settle it by hand before deploying"
-      elif [ "$has_from" = "1" ]; then
-        ok "${from} is there and will be renamed to ${to}"
-      elif [ "$has_to" = "1" ]; then
-        ok "${to} is already renamed"
-      else
-        warn "neither ${from} nor ${to} exists, so the rename will do nothing and ${to} will be created empty"
-      fi
-    done
+    check_renames role pg_roles rolname "${LIVE_ROLE_RENAMES:-}"
+    check_renames database pg_database datname "${LIVE_RENAMES:-}"
   fi
 fi
 

@@ -117,9 +117,38 @@ The second row does not lose data — this DSL never drops anything, so the old 
 
 So: **keep the pair declared until every machine has activated with it.**
 
-### Databases only
+### Databases only — roles go in `roleRenames`
 
-A role's `md5` password is **salted with the role name**, so renaming a role invalidates it; `scram-sha-256` uses a random salt and survives. The two cannot be told apart from here, so roles are out of scope — rename one by hand and set its password again.
+A base and a role can share a name and follow different rules, so they are two lists: one list with a `kind` would trip the duplicate assertion on a pair that renames both, and forgetting `kind` would rename the wrong thing in silence.
+
+## `postgresql.roleRenames`
+
+```nix
+{
+  postgresql.roleRenames = [ { from = "myapp"; to = "myapp_owner"; } ];
+}
+```
+
+Same unit, same four states, and **roles before databases**, so a database renamed afterwards already finds its owner under the new name. A session still open as the role does not block the rename.
+
+What happens to the password depends on how it is stored:
+
+| Stored as | After the rename |
+| --- | --- |
+| `scram-sha-256` | the verifier is **byte for byte the same** and the new name authenticates with the old password; the old name no longer does |
+| `md5` | PostgreSQL **clears** it (`NOTICE: MD5 password cleared because of role rename`): md5 is salted with the role's name |
+
+So under `authMode = "md5"` every new name must have a `passwordFile` in `ensure`, and **evaluation fails** otherwise, naming the role. `postgresql-ensure` runs after the rename and sets the password again. Under `scram` there is nothing to set, and a role still stored as md5 could not have authenticated through a `scram-sha-256` rule in the first place.
+
+Measured in a throwaway PostgreSQL 18 cluster, with the old name refused as the control.
+
+Assertions:
+
+- `from` and `to` must differ, and no role may appear twice across the pairs
+- `from` must not still be in `services.postgresql.ensureUsers` — `postgresql-setup` would create it again, with no password
+- under `md5`, each `to` needs an `ensure` entry with that role and a `passwordFile`
+
+The [pre-deploy checks](../scripts/guards.md) ask the same *both exist?* question for roles as for databases.
 
 ### Where it runs
 

@@ -219,15 +219,40 @@ in
         stops the activation** -- which one holds the data is not a question
         this can answer.
 
-        Databases only. A role's md5 password is salted with its own name, so
-        renaming one invalidates it; scram survives, but the two cannot be told
-        apart from here.
+        Databases only; roles go in `roleRenames`.
       '';
       type = types.listOf (types.submodule {
         options = {
           from = mkOption {
             type = types.str;
             description = "Database name as it is on disk today.";
+          };
+          to = mkOption {
+            type = types.str;
+            description = "Name it should have.";
+          };
+        };
+      });
+    };
+
+    roleRenames = mkOption {
+      default = [ ];
+      example = [ { from = "myapp"; to = "myapp_owner"; } ];
+      description = ''
+        Roles to rename, in the same unit as `renames` and before the
+        databases, with the same four states: only the new name exists is done,
+        neither is nothing, **both existing stops the activation**.
+
+        A scram password survives the rename. An md5 one does not: PostgreSQL
+        clears it, because md5 is salted with the role's name. So with
+        `authMode = "md5"` every new name must have a `passwordFile` in
+        `ensure`, which sets it again after the rename, or evaluation fails.
+      '';
+      type = types.listOf (types.submodule {
+        options = {
+          from = mkOption {
+            type = types.str;
+            description = "Role name as it is in the cluster today.";
           };
           to = mkOption {
             type = types.str;
@@ -291,6 +316,36 @@ in
         message = "postgresql.renames: a database being renamed away is still declared, so it would be created again empty";
       }
       {
+        assertion = lib.all (r: r.from != r.to) cfg.roleRenames;
+        message = "postgresql.roleRenames: a rename needs two different names";
+      }
+      {
+        assertion =
+          let
+            names = map (r: r.from) cfg.roleRenames ++ map (r: r.to) cfg.roleRenames;
+          in
+          lib.length (lib.unique names) == lib.length names;
+        message = "postgresql.roleRenames: a role appears twice, so the order would decide the result";
+      }
+      {
+        assertion =
+          let
+            declared = map (u: u.name) config.services.postgresql.ensureUsers;
+          in
+          lib.all (r: !lib.elem r.from declared) cfg.roleRenames;
+        message = "postgresql.roleRenames: a role being renamed away is still declared, so it would be created again without a password";
+      }
+      {
+        assertion =
+          cfg.authMode != "md5"
+          || lib.all (r: lib.any (e: e.role == r.to && e.passwordFile != null) entries) cfg.roleRenames;
+        message = "postgresql.roleRenames: under authMode md5 the rename clears the role's password, so ${
+          lib.concatMapStringsSep ", " (r: r.to) (
+            lib.filter (r: !lib.any (e: e.role == r.to && e.passwordFile != null) entries) cfg.roleRenames
+          )
+        } needs a passwordFile in postgresql.ensure to set it again";
+      }
+      {
         assertion = lib.all (r: (r.type == "local") == (r.address == null)) cfg.authRules;
         message = "postgresql.authRules: type \"local\" takes no address, and every other type needs one";
       }
@@ -346,8 +401,8 @@ in
     # in the same transaction, and setup starting without this one is exactly
     # the case that matters -- ensureDatabases would create the new name empty,
     # the rename would find no source, and the app would connect to nothing.
-    systemd.services.postgresql-rename = mkIf (cfg.renames != [ ]) {
-      description = "Rename the databases postgresql.renames declares";
+    systemd.services.postgresql-rename = mkIf (cfg.renames != [ ] || cfg.roleRenames != [ ]) {
+      description = "Rename the roles and databases postgresql.roleRenames and postgresql.renames declare";
       after = [ "postgresql.service" ];
       requires = [ "postgresql.service" ];
       before = [ "postgresql-setup.service" ];
@@ -358,6 +413,9 @@ in
         RemainAfterExit = true;
       };
       script = ''
+        export ROLE_RENAME_PAIRS=${
+          lib.escapeShellArg (lib.concatMapStringsSep " " (r: "${r.from}=${r.to}") cfg.roleRenames)
+        }
         export RENAME_PAIRS=${
           lib.escapeShellArg (lib.concatMapStringsSep " " (r: "${r.from}=${r.to}") cfg.renames)
         }
