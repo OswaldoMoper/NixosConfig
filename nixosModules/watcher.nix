@@ -8,7 +8,7 @@ let
 
   mailed = with cfg.alert;
     "{ ${pkgs.gnused}/bin/sed -e '$a\\' ${recipientsFile}; "
-    + "printf 'Subject: %s: %s\\n\\n' \"$CATTLE_URL\" \"$CATTLE_VERDICT\"; ${pkgs.coreutils}/bin/cat; } "
+    + "printf 'Subject: [%s] %s: %s\\n\\n' '${config.networking.hostName}' \"$CATTLE_URL\" \"$CATTLE_VERDICT\"; ${pkgs.coreutils}/bin/cat; } "
     + "| ${pkgs.msmtp}/bin/msmtp -t --set-to-header=undisclosed_recipients"
     + lib.optionalString (passwordFile != null)
         " --passwordeval='${pkgs.coreutils}/bin/cat ${passwordFile}'";
@@ -19,7 +19,7 @@ let
     appConfig = { name = "watch-" + builtins.replaceStrings [ "." ] [ "-" ] name; structure = "/var/empty"; };
     databaseConfig = { name = "none"; structure = "none"; };
     serviceConfig = {
-      remoteHost = { hostName = "127.0.0.1"; userName = "nobody"; userHome = "/var/empty"; };
+      remoteHost = { hostName = cfg.machineAddress; userName = "nobody"; userHome = "/var/empty"; };
       keyDirectory = { name = "none"; structure = "/var/empty"; };
       deleteFrequency = { unit = "Days"; times = 30; };
       watch = { url = "https://${name}"; }
@@ -68,6 +68,26 @@ in
       description = ''
         Addresses every site that is not proxied must resolve to. Empty accepts
         any, which leaves a name pointed somewhere else unnoticed.
+      '';
+    };
+    machineAddress = mkOption {
+      type = types.str;
+      default = "127.0.0.1";
+      example = "203.0.113.10";
+      description = ''
+        Address asked over plain HTTP when a name fails, to tell a name that
+        does not answer from a machine that does not. The default is right
+        only when the watcher runs on the machine it watches.
+      '';
+    };
+    controls = mkOption {
+      type = types.listOf types.str;
+      default = [ ];
+      example = [ "https://1.1.1.1" "https://www.google.com" ];
+      description = ''
+        URLs of sites that are not watched, asked before each pass. When none
+        answers, this machine cannot see out and the pass judges nothing,
+        leaving every count of bad checks as it was. Empty judges every pass.
       '';
     };
     alertCommand = mkOption {
@@ -131,6 +151,8 @@ in
           };
           alertCommand = command;
           apps = lib.mapAttrsToList entry watched;
+        } // lib.optionalAttrs (cfg.controls != [ ]) {
+          inherit (cfg) controls;
         };
       };
     })
