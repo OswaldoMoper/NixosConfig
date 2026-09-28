@@ -2,6 +2,31 @@ psql_() { runuser -u postgres -- psql -v ON_ERROR_STOP=1 -d postgres -tAc "$1"; 
 
 exists() { [ "$(psql_ "SELECT 1 FROM pg_database WHERE datname = '$1'")" = 1 ]; }
 
+role_exists() { [ "$(psql_ "SELECT 1 FROM pg_roles WHERE rolname = '$1'")" = 1 ]; }
+
+# Roles first, so a database renamed below already finds its owner under the
+# new name. Same four states as the databases.
+for pair in ${ROLE_RENAME_PAIRS:-}; do
+  from="${pair%%=*}"
+  to="${pair#*=}"
+
+  if role_exists "$to"; then
+    if role_exists "$from"; then
+      echo "postgresql.roleRenames: both roles ${from} and ${to} exist; nothing here can tell which one is in use" >&2
+      exit 1
+    fi
+    echo "  role ${from} -> ${to}: already renamed"
+    continue
+  fi
+  if ! role_exists "$from"; then
+    echo "  role ${from} -> ${to}: neither exists, nothing to do"
+    continue
+  fi
+
+  psql_ "ALTER ROLE \"$from\" RENAME TO \"$to\"" >/dev/null
+  echo "  role ${from} -> ${to}: renamed"
+done
+
 # datallowconn survives the rename and there is no superuser bypass, so a script
 # that dies between closing the door and reopening it leaves the database
 # unreachable. Whichever name is on disk when we leave, reopen it.
