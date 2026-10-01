@@ -47,11 +47,23 @@ Two checks:
 
 Worth knowing before trusting a green check on a change to `lib/` or a module.
 
+## When a module splits
+
+`webstack` is split into three files, and any module that grows splits the same way:
+
+| | |
+| --- | --- |
+| `webstack.nix` | the options, the module's own `config` (nginx, ACME, the tunnel, the units) and its assertions |
+| `webstack/lib.nix` | what is pure — the app type, `mkVHost`, the holding page — as a function of `{ lib, pkgs }`; it never reads `config` |
+| `webstack/integrations.nix` | what `webstack` writes into other modules: `postgresql.ensure`, `watcher.sites`, `vm.secretValues`, `age.secrets`. It is also the list of what this module demands of others, which `nix flake check` here cannot see |
+
+None of the three pieces is required, and one appears only for a measured reason — a type that is half the file, a new bridge into another module — not for a line count. Turning `cfg` into NixOS options is the module's own job, so it stays in `<mod>.nix`. A split goes in a commit of its own, and the `toplevel` derivation, with the revision neutralised, must come out identical on every host of every consumer.
+
 ## Where things live
 
 | | |
 | --- | --- |
-| `nixosModules/` | the product: options other flakes consume |
+| `nixosModules/` | the product: options other flakes consume; a module that split keeps its pieces in `nixosModules/<mod>/` |
 | `lib/` | `nixFilesIn`, `mkDeployNodes`, `mkPreDeployApps`, `mkVmApps`, `mkLocalRunApps` |
 | `scripts/` | the two gates, their guards, and the database rename |
 | `hosts/` | this repo's own machines — currently one |
