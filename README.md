@@ -101,7 +101,10 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
 ├── flake.nix
 ├── flake.lock
 ├── lib/
-│   └── default.nix                  ← mkDeployNodes, mkPreDeployApps, mkVmApps, mkLocalRunApps
+│   ├── default.nix                  ← nixFilesIn, appModules, and the rest re-exported
+│   ├── deploy.nix                   ← mkPreDeployApps, mkDeployNodes
+│   ├── local.nix                    ← mkLocalRunApps
+│   └── vm.nix                       ← mkVmApps
 ├── hosts/
 │   ├── hardware/
 │   │   └── WSL.nix
