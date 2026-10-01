@@ -117,7 +117,10 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
 │   ├── vm.nix                       ← every host as a local QEMU machine
 │   ├── vscode.nix                   ← `code` from any shell, not only VS Code's
 │   ├── watcher.nix                  ← is each served name up, and which part is not
-│   └── webstack.nix
+│   ├── webstack.nix                 ← web apps: options, nginx, ACME, tunnel, units
+│   └── webstack/
+│       ├── lib.nix                  ← the app type and the vhost, pure
+│       └── integrations.nix         ← what it writes into postgresql, watcher, vm, age
 ├── scripts/
 │   ├── access-guard.sh              ← ssh logins a deploy would take away
 │   ├── cache-guard.sh               ← binary caches on the machine that builds
