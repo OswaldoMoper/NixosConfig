@@ -4,6 +4,13 @@ exists() { [ "$(psql_ "SELECT 1 FROM pg_database WHERE datname = '$1'")" = 1 ]; 
 
 role_exists() { [ "$(psql_ "SELECT 1 FROM pg_roles WHERE rolname = '$1'")" = 1 ]; }
 
+# A server that is not answering says "no such role" and "no such database" to
+# everything, which below reads as "neither exists, nothing to do".
+if [ "$(psql_ "SELECT 1")" != 1 ]; then
+  echo "postgresql.renames: postgres is not answering, so nothing here can say what the renames would find" >&2
+  exit 1
+fi
+
 # Roles first, so a database renamed below already finds its owner under the
 # new name. Same four states as the databases.
 for pair in ${ROLE_RENAME_PAIRS:-}; do
