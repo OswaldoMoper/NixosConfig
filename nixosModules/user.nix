@@ -238,7 +238,7 @@ in
       services.ssh-agent.enable = cfg.home.sshKeys.enable;
       programs.git = mkIf cfg.home.git.enable {
         enable = true;
-        settings.user = {
+        settings.user = lib.filterAttrs (_: v: v != "") {
           name = cfg.home.git.tag;
           email = cfg.home.git.email;
         };
