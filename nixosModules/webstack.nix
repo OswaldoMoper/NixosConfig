@@ -323,8 +323,9 @@ in
             (lib.listToAttrs (map (app: {
               name = app.domain;
               value = if cfg.tunnel.useNginx 
-                then "http://${app.domain}" 
-                else "http://localhost:${toString app.port}";
+                then "http://${app.domain}"
+                # Not localhost, for the reason the nginx proxy gives in webstack/lib.nix.
+                else "http://127.0.0.1:${toString app.port}";
             }) cfg.tunnel.apps))
             (mkIf cfg.tunnel.ssh.enable (
               { "${cfg.tunnel.ssh.domain}" = "ssh://localhost:${toString cfg.tunnel.ssh.port}"; }
