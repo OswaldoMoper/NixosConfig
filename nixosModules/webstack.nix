@@ -300,6 +300,12 @@ in
 
           (listToAttrs (map (app: {
             name = app.domain;
+            value = { inherit (app) locations; };
+          }) (lib.filter (a: a.kind == "profile" && a.locations != { })
+                (cfg.tunnel.apps ++ cfg.nginx.apps))))
+
+          (listToAttrs (map (app: {
+            name = app.domain;
             value = {
               extraConfig = holdingConfig;
               locations = holdingLocation;

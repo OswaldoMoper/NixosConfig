@@ -77,7 +77,7 @@ rec {
           # localhost, so it cannot tell which of its names the visitor typed.
           recommendedProxySettings = true;
         };
-      };
+      } // app.locations;
     };
   };
 
@@ -335,6 +335,19 @@ rec {
           **each alias needs its own DNS record pointing here first**. A name
           that does not resolve fails the order for the whole certificate, not
           just for itself.
+        '';
+      };
+      locations = mkOption {
+        type = types.attrsOf types.attrs;
+        default = { };
+        example = lib.literalExpression ''{ "/api/" = { proxyPass = "http://127.0.0.1:3003"; }; }'';
+        description = ''
+          More nginx locations on this app's virtualHost, each one a
+          `services.nginx.virtualHosts.<name>.locations` value. They sit beside
+          the `/` that reaches the app; naming `/` here replaces it.
+
+          For kind = "profile" they are merged onto the vhost the app's own
+          module built, like `aliases`.
         '';
       };
       redirects = mkOption {
