@@ -8,7 +8,7 @@ let
 
   mailed = with cfg.alert;
     "{ ${pkgs.gnused}/bin/sed -e '$a\\' ${recipientsFile}; "
-    + "printf 'Subject: [%s] %s: %s\\n\\n' '${config.networking.hostName}' \"$CATTLE_URL\" \"$CATTLE_VERDICT\"; ${pkgs.coreutils}/bin/cat; } "
+    + "printf 'Subject: [%s] %s: %s\\n\\n' '${config.networking.hostName}' \"\${CATTLE_URL:-$CATTLE_APP}\" \"$CATTLE_VERDICT\"; ${pkgs.coreutils}/bin/cat; } "
     + "| ${pkgs.msmtp}/bin/msmtp -t --set-to-header=undisclosed_recipients"
     + lib.optionalString (passwordFile != null)
         " --passwordeval='${pkgs.coreutils}/bin/cat ${passwordFile}'";
