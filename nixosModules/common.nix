@@ -13,7 +13,13 @@
   fonts.packages = with pkgs; [
     hack-font
   ];
-  services.openssh.enable = true;
+  services.openssh = {
+    enable = true;
+    settings = {
+      PasswordAuthentication = lib.mkDefault false;
+      KbdInteractiveAuthentication = lib.mkDefault false;
+    };
+  };
   nix = {
     settings = {
       allow-import-from-derivation = true;
