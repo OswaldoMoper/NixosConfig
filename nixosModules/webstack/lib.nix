@@ -58,6 +58,29 @@ rec {
     };
   };
 
+  rateLimitRoutes = app:
+    if app.rateLimit == null then [ ]
+    else lib.imap0 (i: path: { inherit path; zone = "${app.name}-${toString i}"; }) app.rateLimit.paths;
+
+  # Empty for anything but a POST, and nginx does not count a request whose key is empty.
+  rateLimitHttpConfig = apps: ''
+    map $request_method $webstack_post_addr {
+      POST $binary_remote_addr;
+      default "";
+    }
+  '' + lib.concatMapStrings (app: lib.concatMapStrings (r: ''
+    limit_req_zone $webstack_post_addr zone=${r.zone}:1m rate=${toString app.rateLimit.perMinute}r/m;
+  '') (rateLimitRoutes app)) apps;
+
+  rateLimitLocations = app: lib.listToAttrs (map (r: lib.nameValuePair "~ ^${lib.escapeRegex r.path}/?$" {
+    proxyPass = "http://127.0.0.1:${toString app.port}";
+    recommendedProxySettings = true;
+    extraConfig = ''
+      limit_req zone=${r.zone} burst=${toString app.rateLimit.burst} nodelay;
+      limit_req_status 429;
+    '';
+  }) (rateLimitRoutes app));
+
   mkVHost = {app, enableACME ? false}: {
     name = app.domain;
     value = {
@@ -77,7 +100,7 @@ rec {
           # localhost, so it cannot tell which of its names the visitor typed.
           recommendedProxySettings = true;
         };
-      } // app.locations;
+      } // app.locations // rateLimitLocations app;
     };
   };
 
@@ -348,6 +371,39 @@ rec {
 
           For kind = "profile" they are merged onto the vhost the app's own
           module built, like `aliases`.
+        '';
+      };
+      rateLimit = mkOption {
+        type = types.nullOr (types.submodule {
+          options = {
+            paths = mkOption {
+              type = types.listOf types.str;
+              example = [ "/signup" "/password-reset" ];
+              description = "Routes to limit, each starting with `/`.";
+            };
+            perMinute = mkOption {
+              type = types.ints.positive;
+              description = "POSTs one address may send to one route per minute, once its burst is spent.";
+            };
+            burst = mkOption {
+              type = types.ints.unsigned;
+              description = "POSTs beyond that rate served at once, before the next one is refused.";
+            };
+          };
+        });
+        default = null;
+        description = ''
+          Limit how often one address may POST to some of this app's routes.
+          Past the limit nginx answers 429 and the app never sees the request;
+          other methods are not counted, so a form and its page can share a route.
+
+          Each route keeps its own counter per address. A route matches only
+          itself, with or without a trailing slash: a later route that merely
+          starts with the same text is not limited.
+
+          The address is the one nginx sees. Behind a proxy that is the proxy's,
+          unless nginx is told to trust the proxy's header — and behind a tunnel
+          every visitor shares one counter.
         '';
       };
       redirects = mkOption {

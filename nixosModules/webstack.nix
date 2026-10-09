@@ -3,8 +3,10 @@
 let
   inherit (lib) mkIf mkOption mkEnableOption types listToAttrs mkMerge;
   inherit (import ./webstack/lib.nix { inherit lib pkgs; })
-    managed resolvePackage holdingConfig holdingLocation mkVHost webApp;
+    managed resolvePackage holdingConfig holdingLocation mkVHost webApp
+    rateLimitHttpConfig rateLimitLocations;
   cfg = config.webStack;
+  rateLimited = lib.filter (a: a.rateLimit != null) (cfg.tunnel.apps ++ cfg.nginx.apps);
 in
   {
     imports = [ ./webstack/integrations.nix ];
@@ -204,6 +206,10 @@ in
             message = "webStack: Each service must have unique port";
           }
           {
+            assertion = lib.all (a: lib.all (lib.hasPrefix "/") a.rateLimit.paths) rateLimited;
+            message = "webStack: every route in an app's rateLimit.paths must start with '/'.";
+          }
+          {
             assertion = builtins.length (lib.filter (a: a.default) allApps) <= 1;
             message = "webStack: at most one app can set 'default = true'.";
           }
@@ -262,6 +268,7 @@ in
       services.nginx = {
         enable = cfg.nginx.enable || (cfg.tunnel.enable && cfg.tunnel.useNginx)
           || cfg.nginx.redirects != {};
+        appendHttpConfig = mkIf (rateLimited != [ ]) (rateLimitHttpConfig rateLimited);
         virtualHosts = lib.mkMerge [
           (mkIf (cfg.nginx.enable && managed cfg.nginx.apps != []) (
             listToAttrs (map (app: mkVHost { inherit app; enableACME = true; }) (managed cfg.nginx.apps))
@@ -300,8 +307,8 @@ in
 
           (listToAttrs (map (app: {
             name = app.domain;
-            value = { inherit (app) locations; };
-          }) (lib.filter (a: a.kind == "profile" && a.locations != { })
+            value.locations = app.locations // rateLimitLocations app;
+          }) (lib.filter (a: a.kind == "profile" && (a.locations != { } || a.rateLimit != null))
                 (cfg.tunnel.apps ++ cfg.nginx.apps))))
 
           (listToAttrs (map (app: {
