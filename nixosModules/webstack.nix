@@ -4,7 +4,7 @@ let
   inherit (lib) mkIf mkOption mkEnableOption types listToAttrs mkMerge;
   inherit (import ./webstack/lib.nix { inherit lib pkgs; })
     managed resolvePackage holdingConfig holdingLocation mkVHost webApp
-    rateLimitHttpConfig rateLimitLocations;
+    rateLimitHttpConfig rateLimitLocations cloudflareRealIpConfig;
   cfg = config.webStack;
   rateLimited = lib.filter (a: a.rateLimit != null) (cfg.tunnel.apps ++ cfg.nginx.apps);
 in
@@ -72,6 +72,12 @@ in
             towards the global domain uniqueness assertions.
           '';
         };
+        behindCloudflare = mkEnableOption ''
+          taking a visitor's address from CF-Connecting-IP when the request
+          comes from one of Cloudflare's ranges, for a machine some or all of
+          whose names reach it through Cloudflare's proxy. Requests from
+          anywhere else keep the address they came from. Not for a tunnel,
+          whose requests arrive from this machine'';
       };
 
       tunnel = {
@@ -268,7 +274,10 @@ in
       services.nginx = {
         enable = cfg.nginx.enable || (cfg.tunnel.enable && cfg.tunnel.useNginx)
           || cfg.nginx.redirects != {};
-        appendHttpConfig = mkIf (rateLimited != [ ]) (rateLimitHttpConfig rateLimited);
+        appendHttpConfig = mkMerge [
+          (mkIf cfg.nginx.behindCloudflare cloudflareRealIpConfig)
+          (mkIf (rateLimited != [ ]) (rateLimitHttpConfig rateLimited))
+        ];
         virtualHosts = lib.mkMerge [
           (mkIf (cfg.nginx.enable && managed cfg.nginx.apps != []) (
             listToAttrs (map (app: mkVHost { inherit app; enableACME = true; }) (managed cfg.nginx.apps))
