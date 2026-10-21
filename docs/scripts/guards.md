@@ -29,6 +29,12 @@ nix run .#deploy-myNode
 
 A node that declares a `backup` and a `census` gets four more actions inside those eight, as `6c`, `6d`, `8b` and `8c`; one that also declares a `schema` gets `6a` and `6e`; a node without a backup gets `6b` and `7b` with `GATE_MIGRATE=1`. See below.
 
+`checks.deploy-gate` runs the gate through `tests/deploy-gate.sh`, against fakes, and judges each case on its exit code, the last step it printed and the commands it ran. A message's wording is checked only where the message is the whole effect: the verdict for each code of the schema program, and the warnings on paths that otherwise pass. A change to the gate runs it with:
+
+```bash
+bash tests/deploy-gate.sh scripts/deploy-gate.sh
+```
+
 ### Three decisions that are easy to misread
 
 **Step 1 asks the remote, and only a failed fetch stops it.** Not a git checkout, or a branch with no upstream, are facts the operator chose and can see: they warn. A fetch that fails is different — it is "I could not ask whether this tree is stale", which is the state that lets a stale tree through believing it was checked. Same shape as the access guard's exit 2.

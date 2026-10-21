@@ -133,6 +133,8 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
 │   ├── postgresql-rename.sh         ← move a database before setup creates it empty
 │   ├── rebuild-gate.sh              ← the same eight steps, on the machine itself
 │   └── run-local.sh                 ← the app stack as plain processes
+├── tests/
+│   └── deploy-gate.sh               ← the deploy gate against fake ssh, nix and deploy
 └── docs/
 ```
 
