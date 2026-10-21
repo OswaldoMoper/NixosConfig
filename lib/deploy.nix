@@ -215,6 +215,11 @@
                   export GATE_BACKUP_APP=${lib.escapeShellArg node.backup.app}
                   export GATE_BACKUP_CONFIG=${lib.escapeShellArg node.backup.config}
                 ''}
+                ${lib.optionalString ((node.schema or null) != null) ''
+                  export GATE_SCHEMA_BIN=${lib.escapeShellArg (lib.getExe node.schema.package)}
+                  export GATE_SCHEMA_USER=${lib.escapeShellArg node.schema.user}
+                ''}
+                export GATE_FAST_CONNECTION=${if node.fastConnection or false then "1" else "0"}
 
                 ${builtins.readFile ../scripts/deploy-gate.sh}
               '';

@@ -97,6 +97,10 @@ The flake checks the deploy gate builds in its step 3, by name. Empty, the defau
 
 `{ rowsIn; files; }`: tables whose rows must not drop, and directories whose entries are counted. The gate counts before and after the deploy and stops when something disappeared that `GATE_SHRINK_OK` does not name. With a `backup` as well it first puts back what cannot cost anything — a database whose `rowsIn` tables all came back empty, and entries missing from `files` — and never replaces a database that is merely behind. Only list tables where losing rows is always wrong: a queue drains by being consumed.
 
+### `deployment.<node>.schema`
+
+`{ package; user; }`: a program on the machine that changes the application's database schema, and the account the gate runs it as with `sudo`. The gate runs it with `plan` before the copy and with `apply` after it, each followed by the names in `GATE_SCHEMA_OK`, and stops before the deploy on any exit but 0. It has to be in the closure of the system the node deploys, and the node needs a `backup` as well. Null, the default, runs neither; see [the gate](../scripts/guards.md).
+
 ## How the flake processes deployments
 
 1. Each host may define zero or more `deployment.<node>` entries.
@@ -168,7 +172,8 @@ The gate that [`lib.mkPreDeployApps`](../scripts/guards.md) generates relies on 
 - it reads `deploy.nodes.<node>.hostname`
 - it reads `deploy.nodes.<node>.profiles.system.sshUser`
 - it reads the activation path
-- it reads `checks`, `backup` and `census`, which decide step 3, step `6d` and steps `6c`, `8b` and `8c`
+- it reads `checks`, `backup`, `census` and `schema`, which decide step 3, step `6d`, steps `6c`, `8b` and `8c`, and steps `6a` and `6e`
+- it reads `fastConnection`, which decides how step `6a` copies the system
 
 So this module is what makes a plain deploy, a PostgreSQL major upgrade through the backup, and a `GATE_MIGRATE=1` one for a node without a backup possible at all.
 
