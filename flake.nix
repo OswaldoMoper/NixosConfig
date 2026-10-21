@@ -88,6 +88,15 @@
             shellcheck -s bash -e SC2029 ${./scripts}/*.sh
             touch "$out"
           '';
+
+      deploy-gate =
+        (nixpkgs.legacyPackages.${system}).runCommand "deploy-gate-test"
+          { nativeBuildInputs = [ (nixpkgs.legacyPackages.${system}).shellcheck ]; }
+          ''
+            shellcheck -s bash ${./tests/deploy-gate.sh}
+            bash ${./tests/deploy-gate.sh} ${./scripts/deploy-gate.sh}
+            touch "$out"
+          '';
     };
     nixosModules = lib.mapAttrs (_: import) (myLib.nixFilesIn ./nixosModules);
   };

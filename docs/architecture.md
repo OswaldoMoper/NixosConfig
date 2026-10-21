@@ -32,18 +32,19 @@ Deploys **build where you run them** and only copy the closure, so the servers n
 
 ## What `nix flake check` here does and does not see
 
-Two checks:
+Three checks:
 
 | | |
 | --- | --- |
 | `checks.hosts` | forces `system.build.toplevel.drvPath` for **every** host in `hosts/`. That is an *evaluation*, not a build: assertions fire, option types are enforced, and a module that no longer evaluates fails here rather than in the consuming flake after a push |
 | `checks.scripts` | shellcheck over all of `scripts/` |
+| `checks.deploy-gate` | runs `scripts/deploy-gate.sh` through `tests/deploy-gate.sh`, against fake ssh, nix, deploy, guards, census and backup: where each case stops and what it ran |
 
 `hosts` discards the string context on purpose, so nothing is built. A package that fails to compile is still invisible here.
 
 **And one host is not a fleet.** The check only sees conflicts this repo's own configuration can produce, which is the narrow case. A module that unconditionally asserts `programs.nix-ld.enable = false` evaluates perfectly here — there is nothing to disagree with it — and breaks every consumer whose own module says `true`. Measured, and the reason an enable-shaped option may only ever turn something on.
 
-`lib/deploy.nix` is also only half exercised: `deployPkg` is never passed and the single local host declares no `deployment`, so `deploy.nodes` is empty and the **deploy** gate is unreachable from here. The **rebuild** gate is not — every host gets one, so `rebuild-spartanWSL` is built and shellchecked.
+`lib/deploy.nix` is also only half exercised: `deployPkg` is never passed and the single local host declares no `deployment`, so `deploy.nodes` is empty and the **deploy** gate's wrapper is unreachable from here; its script is exercised only by `checks.deploy-gate`, with the environment the wrapper would export written by hand. The **rebuild** gate is not — every host gets one, so `rebuild-spartanWSL` is built and shellchecked.
 
 Worth knowing before trusting a green check on a change to `lib/` or a module.
 
