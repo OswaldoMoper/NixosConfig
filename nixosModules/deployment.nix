@@ -113,6 +113,35 @@ with lib; {
             };
           });
         };
+        schema = mkOption {
+          default = null;
+          description = ''
+            A program on the machine that changes the application's database
+            schema. The gate runs it with `plan` before the backup and with
+            `apply` after it, both times followed by the names in
+            GATE_SCHEMA_OK, and stops before the deploy on anything but exit 0:
+            2 could not look, 3 a pending change nobody named, 4 one that only
+            a release can fix.
+
+            It runs on the machine, from the system the gate built, so it has
+            to be in that system's closure. A node with a schema needs a backup
+            as well, and the gate refuses one without it.
+
+            Null runs neither, and the gate refuses GATE_SCHEMA_OK.
+          '';
+          type = types.nullOr (types.submodule {
+            options = {
+              package = mkOption {
+                type = types.package;
+                description = "The program; its main executable takes `plan` or `apply` and then the names.";
+              };
+              user = mkOption {
+                type = types.str;
+                description = "The account the gate runs it as, with sudo on the machine.";
+              };
+            };
+          });
+        };
         profiles = mkOption {
           default = {};
           type = types.attrsOf (types.submodule {

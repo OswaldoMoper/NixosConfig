@@ -27,7 +27,7 @@ nix run .#deploy-myNode
 | 7 | deploy | exit code **recorded, not obeyed** |
 | 8 | verify the result | yes |
 
-A node that declares a `backup` and a `census` gets four more actions inside those eight, as `6c`, `6d`, `8b` and `8c`; a node without a backup gets `6b` and `7b` with `GATE_MIGRATE=1`. See below.
+A node that declares a `backup` and a `census` gets four more actions inside those eight, as `6c`, `6d`, `8b` and `8c`; one that also declares a `schema` gets `6a` and `6e`; a node without a backup gets `6b` and `7b` with `GATE_MIGRATE=1`. See below.
 
 ### Three decisions that are easy to misread
 
@@ -87,6 +87,49 @@ GATE_SHRINK_OK="old_table" nix run .#deploy-myNode
 ```
 
 The census counts the top level of each `census.files` directory, so an entry lost further down is not seen, and not put back.
+
+### `GATE_SCHEMA_OK` — the schema changes before the deploy
+
+A node that declares `deployment.<node>.schema` gets two more actions, around the copy:
+
+| | |
+| --- | --- |
+| `6a/8` | check that the program is in the system step 5 built, copy that system to the machine, and run `<program> plan <names>` there as `schema.user` |
+| `6e/8` | after `6d` has a copy, run `<program> apply <names>` |
+
+The names are the SQL files whoever deploys allows this once, from `GATE_SCHEMA_OK`:
+
+```bash
+GATE_SCHEMA_OK="0003-rename-x" nix run .#deploy-myNode
+```
+
+The gate only passes them on and reads the exit code; which change needs a name is the program's rule. Anything but 0 stops before step 7:
+
+| Exit | Means | The gate says |
+| --- | --- | --- |
+| 0 | nothing pending, or only what needs no name and the SQL named | goes on |
+| 2 | the program could not look | stops |
+| 3 | a pending SQL nobody named, or a name that matches none | name it in `GATE_SCHEMA_OK` and run again |
+| 4 | something only a release can give: a destructive change no SQL covers, an applied SQL that changed, a SQL that fails | stops |
+| other | | stops, with the code |
+
+The program prints the detail. After `6e` the old system is still serving, and the copy from `6d` is there.
+
+**`plan` goes before the census and the copy**, so a change nobody named stops the deploy without spending a backup. **`apply` goes after the copy** and right before the deploy: for a few seconds the old application runs on the changed schema, which is why a deploy should only add.
+
+**The program runs on the machine, from the new system.** The step that copies it there is the same copy deploy-rs makes in step 7, with the same flags, so step 7 finds it done. A program that is not in that system's closure stops the gate, since the machine would not have it.
+
+Three refusals, before step 1, deploy nothing:
+
+- `GATE_SCHEMA_OK` on a node with no `schema`, since nothing would apply the names;
+- `GATE_SCHEMA_OK` together with `GATE_SKIP_SCHEMA=1`;
+- a `schema` without a `backup`, since `6e` would change the database with no copy to go back to.
+
+A SQL that renames a table loses a name to the census as well: name it in `GATE_SHRINK_OK` too.
+
+### `GATE_SKIP_SCHEMA=1`
+
+Skips `6a` and `6e`, saying so. It exists for the case the program itself is broken, since without it the way around is `deploy` by hand, which skips the copy, the census and the verify as well. If a change is pending, the new application may refuse to start without it, and step 8 says so.
 
 ### `GATE_MIGRATE=1`
 

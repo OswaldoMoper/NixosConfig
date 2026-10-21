@@ -53,6 +53,50 @@ if [ "${GATE_MIGRATE:-0}" = "1" ] && [ -n "${GATE_BACKUP_BIN:-}" ]; then
   exit 1
 fi
 
+# Names nothing will apply must not read as applied.
+if [ -n "${GATE_SCHEMA_OK:-}" ] && [ -z "${GATE_SCHEMA_BIN:-}" ]; then
+  printf 'GATE_SCHEMA_OK names SQL, and %s declares no schema to apply it.\n' "$GATE_NODE" >&2
+  printf 'Nothing was deployed.\n' >&2
+  exit 1
+fi
+if [ -n "${GATE_SCHEMA_OK:-}" ] && [ "${GATE_SKIP_SCHEMA:-0}" = "1" ]; then
+  printf 'GATE_SCHEMA_OK names SQL, and GATE_SKIP_SCHEMA=1 skips the step that applies it:\n' >&2
+  printf 'say one or the other. Nothing was deployed.\n' >&2
+  exit 1
+fi
+# 6e changes the database, and only after 6d has a copy of it.
+if [ -n "${GATE_SCHEMA_BIN:-}" ] && [ -z "${GATE_BACKUP_BIN:-}" ]; then
+  printf '%s declares a schema and no backup: step 6e would change the database\n' "$GATE_NODE" >&2
+  printf 'with no copy to go back to. Nothing was deployed.\n' >&2
+  exit 1
+fi
+
+schema_names=()
+[ -z "${GATE_SCHEMA_OK:-}" ] || read -r -a schema_names <<< "$GATE_SCHEMA_OK"
+
+# The program runs on the machine, as the application's account, from the
+# system step 5 built.
+schema_run() {
+  gate_ssh "$(printf '%q ' sudo -u "$GATE_SCHEMA_USER" "$GATE_SCHEMA_BIN" "$1" ${schema_names[@]+"${schema_names[@]}"})"
+}
+
+# The program prints the detail; this is the verdict, and what to do about it.
+schema_stopped() {
+  local rc="$1" verb="$2"
+  case "$rc" in
+    2) printf '\ncould not %s the schema\n' "$verb" ;;
+    3) printf '\na pending SQL is not named, or a name matches none:\n'
+       printf 'name it in GATE_SCHEMA_OK and run again\n' ;;
+    4) printf '\nthe schema needs what only a release can give (the program said which)\n' ;;
+    *) printf '\nthe schema program exited %s\n' "$rc" ;;
+  esac >&2
+  printf 'nothing was deployed\n' >&2
+  if [ "$verb" = change ]; then
+    printf 'the machine still serves the old system, and the copy from 6d is there\n' >&2
+  fi
+  exit 1
+}
+
 step "1/8 is this checkout current"
 # First because it is the cheapest and because every later step inherits its
 # answer: a stale tree's own checks are stale too.
@@ -145,6 +189,37 @@ if [ "$access_rc" -eq 2 ]; then
   exit 1
 fi
 
+# Before the census and the copy, so a change nobody named stops the deploy
+# without spending a backup on it.
+if [ -n "${GATE_SCHEMA_BIN:-}" ]; then
+  step "6a/8 what the schema needs"
+  if [ "${GATE_SKIP_SCHEMA:-0}" = "1" ]; then
+    printf 'SKIPPED because GATE_SKIP_SCHEMA=1, and 6e with it\n' >&2
+    printf 'if a change is pending, the new application may refuse to start without it\n' >&2
+  else
+    closure="$(nix-store -qR "$built")" || {
+      printf 'could not read what %s holds; nothing was deployed\n' "$built" >&2
+      exit 1
+    }
+    if ! grep -qxF "$(dirname "$(dirname "$GATE_SCHEMA_BIN")")" <<< "$closure"; then
+      printf '%s is not in the system step 5 built,\n' "$GATE_SCHEMA_BIN" >&2
+      printf 'so the machine would not have it; nothing was deployed\n' >&2
+      exit 1
+    fi
+    # The same copy deploy-rs makes in step 7, which then finds it done.
+    copy=(nix copy --no-check-sigs)
+    [ "${GATE_FAST_CONNECTION:-0}" = "1" ] || copy+=(--substitute-on-destination)
+    NIX_SSHOPTS="-o BatchMode=yes -o ConnectTimeout=10${GATE_SSH_CONFIG:+ -F $GATE_SSH_CONFIG}" \
+      "${copy[@]}" --to "ssh://${GATE_HOST_USER}@${GATE_HOST_ADDR}" "$built" || {
+      printf 'could not copy the system to the machine; nothing was deployed\n' >&2
+      exit 1
+    }
+    schema_rc=0
+    schema_run plan || schema_rc=$?
+    [ "$schema_rc" -eq 0 ] || schema_stopped "$schema_rc" "look at"
+  fi
+fi
+
 # A major bump orphans the old data directory, so the dump goes between the
 # last check and the deploy: late enough that nothing else can abort after it,
 # early enough that the machine is still serving the old cluster.
@@ -200,6 +275,13 @@ if [ -n "${GATE_BACKUP_BIN:-}" ]; then
     printf 'if this is deliberate, say so out loud rather than here\n' >&2
     exit 1
   }
+fi
+
+if [ -n "${GATE_SCHEMA_BIN:-}" ] && [ "${GATE_SKIP_SCHEMA:-0}" != "1" ]; then
+  step "6e/8 change the schema"
+  schema_rc=0
+  schema_run apply || schema_rc=$?
+  [ "$schema_rc" -eq 0 ] || schema_stopped "$schema_rc" change
 fi
 
 step "7/8 deploy"
