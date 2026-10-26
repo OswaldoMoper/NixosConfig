@@ -9,7 +9,10 @@ let
   mailed = config.alerts.mailCommand
     "printf 'Subject: [%s] %s: %s\\n\\n' '${config.networking.hostName}' \"\${CATTLE_URL:-$CATTLE_APP}\" \"$CATTLE_VERDICT\"";
 
-  command = if config.alerts.recipientsFile != null then mailed else cfg.alertCommand;
+  command =
+    if cfg.alertCommand != null then cfg.alertCommand
+    else if config.alerts.recipientsFile != null then mailed
+    else null;
 
   entry = name: site: {
     appConfig = { name = "watch-" + builtins.replaceStrings [ "." ] [ "-" ] name; structure = "/var/empty"; };
@@ -79,11 +82,10 @@ in
       description = ''
         Path on the machine to cattleServer's whole configuration, for a watch
         whose names, addresses and alert are themselves a secret. It replaces
-        sites, hostAddresses, machineAddress, controls, alertCommand and
-        alerts.recipientsFile, which must be left unset, and
-        services.cattleServer.settings. Its alert command finds msmtp, sed and
-        cat on the unit's PATH, never in the store: a store path inside a
-        secret keeps nothing alive.
+        sites, hostAddresses, machineAddress, controls and alertCommand, which
+        must be left unset, and services.cattleServer.settings; alerts is not
+        read. Its alert command finds msmtp, sed and cat on the unit's PATH,
+        never in the store: a store path inside a secret keeps nothing alive.
       '';
     };
     machineAddress = mkOption {
@@ -111,7 +113,8 @@ in
       default = null;
       description = ''
         Shell command run once a name has failed its checks, with the detail on
-        standard input. Null logs and never alerts. Excludes alerts.recipientsFile.
+        standard input. Used instead of alerts when set; null with no
+        alerts.recipientsFile logs and never alerts.
       '';
     };
   };
@@ -124,14 +127,10 @@ in
           message = "watcher writes services.cattleServer, so the host has to import cattleServer's NixOS module (inputs.cattleServer.nixosModules.default).";
         }
         {
-          assertion = cfg.alertCommand == null || config.alerts.recipientsFile == null;
-          message = "watcher: set alertCommand or alerts.recipientsFile, not both; the second builds the first.";
-        }
-        {
           assertion =
             cfg.settingsFile == null
-            || (watched == { } && config.alerts.recipientsFile == null && cfg.alertCommand == null && cfg.controls == [ ]);
-          message = "watcher.settingsFile holds the whole watch, so sites, controls, alertCommand and alerts.recipientsFile would be ignored: leave them unset (a webStack app on this host adds its names to sites).";
+            || (watched == { } && cfg.alertCommand == null && cfg.controls == [ ]);
+          message = "watcher.settingsFile holds the whole watch, so sites, controls and alertCommand would be ignored: leave them unset (a webStack app on this host adds its names to sites).";
         }
       ];
     }

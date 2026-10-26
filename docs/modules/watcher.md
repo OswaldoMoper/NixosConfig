@@ -34,7 +34,7 @@ alerts = {
 | `machineAddress` | the origin asked over plain http when a name fails, to tell the name from the machine. `127.0.0.1` by default, which is right only when the watcher runs on the machine it watches |
 | `controls` | URLs of sites that are not watched, asked first. When none answers, the pass logs `Cannot look`, judges nothing and leaves every count of bad checks alone. Empty by default; set, it needs a cattleServer that knows `controls` |
 | `settingsFile` | a secret holding cattleServer's whole configuration, for a watch whose names and addresses are secret too. Replaces every option above and `services.cattleServer.settings`; see below |
-| `alertCommand` | any other shell command, run once a name has failed its checks, with the detail on standard input. Null only logs. Excludes [`alerts.recipientsFile`](./alerts.md) |
+| `alertCommand` | any other shell command, run once a name has failed its checks, with the detail on standard input. Used instead of [`alerts`](./alerts.md) when set; null, with no `alerts.recipientsFile`, only logs |
 
 ## Who is alerted
 
@@ -48,7 +48,7 @@ The cadence is cattleServer's own, `services.cattleServer.settings.checkEvery`, 
 
 ## The whole watch as a secret
 
-`settingsFile` hands cattleServer a configuration that never enters the store, through its own `services.cattleServer.settingsFile`, which arrives as a systemd credential. Everything the other options would render goes inside it — the sites, the addresses, `controls`, the cadence and the alert command — so they must be left unset, and an assertion says so. A webStack app on the same host adds its names to `sites`, which trips that assertion: such a host watches with the ordinary options.
+`settingsFile` hands cattleServer a configuration that never enters the store, through its own `services.cattleServer.settingsFile`, which arrives as a systemd credential. Everything the other options would render goes inside it — the sites, the addresses, `controls`, the cadence and the alert command — so they must be left unset, and an assertion says so; [`alerts`](./alerts.md) is not read, so the host can keep it for other modules. A webStack app on the same host adds its names to `sites`, which trips that assertion: such a host watches with the ordinary options.
 
 The alert command inside the file calls `msmtp`, `sed` and `cat` **by name**, and the module puts them on the unit's `PATH`. A store path written into a secret keeps nothing alive, so after the next collection the command would point at nothing and the alert would fail at the one moment it matters. The mail account can travel the same way, as an `msmtprc` passed with `msmtp -C`.
 
