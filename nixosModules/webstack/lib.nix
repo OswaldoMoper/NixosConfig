@@ -58,25 +58,38 @@ rec {
     };
   };
 
-  rateLimitRoutes = app:
-    if app.rateLimit == null then [ ]
-    else lib.imap0 (i: path: { inherit path; zone = "${app.name}-${toString i}"; }) app.rateLimit.paths;
+  rateLimitZone = app: name: i: "${app.name}-${name}-${toString i}";
 
-  # Empty for anything but a POST, and nginx does not count a request whose key is empty.
-  rateLimitHttpConfig = apps: ''
-    map $request_method $webstack_post_addr {
-      POST $binary_remote_addr;
-      default "";
-    }
-  '' + lib.concatMapStrings (app: lib.concatMapStrings (r: ''
-    limit_req_zone $webstack_post_addr zone=${r.zone}:1m rate=${toString app.rateLimit.perMinute}r/m;
-  '') (rateLimitRoutes app)) apps;
+  rateLimits = lib.concatMap (app: lib.mapAttrsToList (name: limit: { inherit app name limit; }) app.rateLimit);
+
+  rateLimitRoutes = app: lib.concatLists (lib.mapAttrsToList (name: limit:
+    lib.imap0 (i: path: { inherit path; inherit (limit) burst; zone = rateLimitZone app name i; }) limit.paths
+  ) app.rateLimit);
+
+  # A limit's key is the address only for its methods and outside its exempt
+  # addresses, and nginx does not count a request whose key is empty.
+  rateLimitHttpConfig = apps: lib.concatStrings (lib.imap0 (i: { app, name, limit }:
+    let
+      key = "$webstack_limit_${toString i}";
+      byMethod = if limit.exempt == [ ] then key else "${key}_method";
+    in
+      "map $request_method ${byMethod} {\n"
+      + lib.concatMapStrings (m: "  ${m} $binary_remote_addr;\n") limit.methods
+      + "  default \"\";\n}\n"
+      + lib.optionalString (limit.exempt != [ ]) (
+        "geo ${key}_exempt {\n  default 0;\n"
+        + lib.concatMapStrings (a: "  ${a} 1;\n") limit.exempt
+        + "}\nmap ${key}_exempt ${key} {\n  1 \"\";\n  default ${byMethod};\n}\n")
+      + lib.concatStrings (lib.imap0 (j: _:
+        "limit_req_zone ${key} zone=${rateLimitZone app name j}:1m rate=${toString limit.perMinute}r/m;\n"
+      ) limit.paths)
+  ) (rateLimits apps));
 
   rateLimitLocations = app: lib.listToAttrs (map (r: lib.nameValuePair "~ ^${lib.escapeRegex r.path}/?$" {
     proxyPass = "http://127.0.0.1:${toString app.port}";
     recommendedProxySettings = true;
     extraConfig = ''
-      limit_req zone=${r.zone} burst=${toString app.rateLimit.burst} nodelay;
+      limit_req zone=${r.zone} burst=${toString r.burst} nodelay;
       limit_req_status 429;
     '';
   }) (rateLimitRoutes app));
@@ -388,32 +401,50 @@ rec {
         '';
       };
       rateLimit = mkOption {
-        type = types.nullOr (types.submodule {
+        type = types.attrsOf (types.submodule {
           options = {
             paths = mkOption {
               type = types.listOf types.str;
               example = [ "/signup" "/password-reset" ];
               description = "Routes to limit, each starting with `/`.";
             };
+            methods = mkOption {
+              type = types.nonEmptyListOf (types.enum [ "GET" "HEAD" "POST" "PUT" "PATCH" "DELETE" "OPTIONS" ]);
+              example = [ "POST" ];
+              description = "Methods counted; any other method on these routes passes uncounted.";
+            };
             perMinute = mkOption {
               type = types.ints.positive;
-              description = "POSTs one address may send to one route per minute, once its burst is spent.";
+              description = "Requests one address may send to one route per minute, once its burst is spent.";
             };
             burst = mkOption {
               type = types.ints.unsigned;
-              description = "POSTs beyond that rate served at once, before the next one is refused.";
+              description = "Requests beyond that rate served at once, before the next one is refused.";
+            };
+            exempt = mkOption {
+              type = types.listOf types.str;
+              default = [ ];
+              example = [ "203.0.113.7" "198.51.100.0/24" ];
+              description = "Addresses or CIDR ranges this limit never counts.";
             };
           };
         });
-        default = null;
+        default = { };
+        example = lib.literalExpression ''
+          {
+            signup = { paths = [ "/signup" ]; methods = [ "POST" ]; perMinute = 1; burst = 3; };
+            login = { paths = [ "/login" ]; methods = [ "POST" "PUT" ]; perMinute = 30; burst = 20; };
+          }
+        '';
         description = ''
-          Limit how often one address may POST to some of this app's routes.
-          Past the limit nginx answers 429 and the app never sees the request;
-          other methods are not counted, so a form and its page can share a route.
+          Limits on how often one address may send some requests to this app,
+          each under its own name. Past a limit nginx answers 429 and the app
+          never sees the request.
 
           Each route keeps its own counter per address. A route matches only
           itself, with or without a trailing slash: a later route that merely
-          starts with the same text is not limited.
+          starts with the same text is not limited. A route belongs to at most
+          one limit of the app.
 
           The address is the one nginx sees. Behind a proxy that is the proxy's,
           unless nginx is told to trust the proxy's header — and behind a tunnel

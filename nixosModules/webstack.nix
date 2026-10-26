@@ -6,7 +6,8 @@ let
     managed resolvePackage holdingConfig holdingLocation mkVHost webApp
     rateLimitHttpConfig rateLimitLocations cloudflareRealIpConfig;
   cfg = config.webStack;
-  rateLimited = lib.filter (a: a.rateLimit != null) (cfg.tunnel.apps ++ cfg.nginx.apps);
+  rateLimited = lib.filter (a: a.rateLimit != { }) (cfg.tunnel.apps ++ cfg.nginx.apps);
+  limitedPaths = a: lib.concatMap (l: l.paths) (lib.attrValues a.rateLimit);
 in
   {
     imports = [ ./webstack/integrations.nix ];
@@ -212,8 +213,17 @@ in
             message = "webStack: Each service must have unique port";
           }
           {
-            assertion = lib.all (a: lib.all (lib.hasPrefix "/") a.rateLimit.paths) rateLimited;
-            message = "webStack: every route in an app's rateLimit.paths must start with '/'.";
+            assertion = lib.all (a: lib.all (lib.hasPrefix "/") (limitedPaths a)) rateLimited;
+            message = "webStack: every route in an app's rateLimit.<name>.paths must start with '/'.";
+          }
+          {
+            assertion = lib.all (a: lib.allUnique (limitedPaths a)) rateLimited;
+            message = "webStack: a route can belong to only one of an app's rateLimit entries.";
+          }
+          {
+            assertion = lib.all (a: lib.all (n: builtins.match "[A-Za-z0-9_-]+" n != null)
+              (lib.attrNames a.rateLimit)) rateLimited;
+            message = "webStack: a rateLimit name may hold only letters, digits, '_' and '-'.";
           }
           {
             assertion = builtins.length (lib.filter (a: a.default) allApps) <= 1;
@@ -317,7 +327,7 @@ in
           (listToAttrs (map (app: {
             name = app.domain;
             value.locations = app.locations // rateLimitLocations app;
-          }) (lib.filter (a: a.kind == "profile" && (a.locations != { } || a.rateLimit != null))
+          }) (lib.filter (a: a.kind == "profile" && (a.locations != { } || a.rateLimit != { }))
                 (cfg.tunnel.apps ++ cfg.nginx.apps))))
 
           (listToAttrs (map (app: {
