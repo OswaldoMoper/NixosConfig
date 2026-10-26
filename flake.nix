@@ -98,6 +98,6 @@
             touch "$out"
           '';
     };
-    nixosModules = lib.mapAttrs (_: import) (myLib.nixFilesIn ./nixosModules);
+    nixosModules = myLib.nixFilesIn ./nixosModules;
   };
 }

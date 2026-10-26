@@ -14,9 +14,9 @@ Currently optimized for `x86_64-linux`.
 
 **Hosts are auto-detected.** The flake reads every `.nix` file in `hosts/` and generates `nixosConfigurations.<host>`, plus `deploy.nodes` where a `deployment` is declared. Adding a machine needs zero changes to `flake.nix`.
 
-**Modules are listed twice.** The `nixosModules` *output* is a directory sweep, so a new file there is exported to consumers automatically. But the list applied to this repo's own hosts is written out by hand. A module can therefore be shipped and never evaluated here — which has happened. The two agree today; nothing enforces that they keep agreeing.
+**Modules are listed twice.** The `nixosModules` *output* is a directory sweep, so a new file there is exported to consumers automatically. Each is exported as its path, so a module that arrives twice — listed by a consumer and imported by another module — is recognised and declared once. But the list applied to this repo's own hosts is written out by hand. A module can therefore be shipped and never evaluated here — which has happened. The two agree today; nothing enforces that they keep agreeing.
 
-Both sweeps are one function — `lib.nixFilesIn`, exported like the rest of `lib/` — so the `.nix` filter cannot be present in one and missing in the other. It has to be there: anything else in that directory would be `import`ed as a module and break **the consuming flake**, not this one. That is not hypothetical — the module sweep once lacked the filter, and the failure showed up downstream.
+Both sweeps are one function — `lib.nixFilesIn`, exported like the rest of `lib/` — so the `.nix` filter cannot be present in one and missing in the other. It has to be there: anything else in that directory would be exported as a module and break **the consuming flake**, not this one. That is not hypothetical — the module sweep once lacked the filter, and the failure showed up downstream.
 
 ## Deployment architecture
 
