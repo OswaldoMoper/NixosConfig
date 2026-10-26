@@ -111,6 +111,7 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
 │   └── spartanWSL.nix
 ├── hmProfiles/                      ← per-user profiles (none committed yet)
 ├── nixosModules/
+│   ├── alerts.nix                   ← who a module mails when it alerts
 │   ├── common.nix
 │   ├── deployment.nix
 │   ├── graphical.nix
@@ -409,6 +410,7 @@ Full documentation is available in the [`/docs/`](./docs/) directory:
 - [Hosts](./docs/hosts.md)
 - [Web stack](./docs/modules/webstack.md)
 - [Watcher](./docs/modules/watcher.md)
+- [Alerts](./docs/modules/alerts.md)
 - [PostgreSQL](./docs/modules/postgresql.md)
 - [Deployment](./docs/modules/deployment.md)
 - [The two gates and their guards](./docs/scripts/guards.md)

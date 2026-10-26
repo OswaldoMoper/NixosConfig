@@ -6,14 +6,10 @@ let
 
   watched = lib.filterAttrs (_: site: site.enable) cfg.sites;
 
-  mailed = with cfg.alert;
-    "{ ${pkgs.gnused}/bin/sed -e '$a\\' ${recipientsFile}; "
-    + "printf 'Subject: [%s] %s: %s\\n\\n' '${config.networking.hostName}' \"\${CATTLE_URL:-$CATTLE_APP}\" \"$CATTLE_VERDICT\"; ${pkgs.coreutils}/bin/cat; } "
-    + "| ${pkgs.msmtp}/bin/msmtp -t --set-to-header=undisclosed_recipients"
-    + lib.optionalString (passwordFile != null)
-        " --passwordeval='${pkgs.coreutils}/bin/cat ${passwordFile}'";
+  mailed = config.alerts.mailCommand
+    "printf 'Subject: [%s] %s: %s\\n\\n' '${config.networking.hostName}' \"\${CATTLE_URL:-$CATTLE_APP}\" \"$CATTLE_VERDICT\"";
 
-  command = if cfg.alert.recipientsFile != null then mailed else cfg.alertCommand;
+  command = if config.alerts.recipientsFile != null then mailed else cfg.alertCommand;
 
   entry = name: site: {
     appConfig = { name = "watch-" + builtins.replaceStrings [ "." ] [ "-" ] name; structure = "/var/empty"; };
@@ -30,6 +26,12 @@ let
   };
 in
 {
+  imports = [
+    ./alerts.nix
+    (lib.mkRenamedOptionModule [ "watcher" "alert" "recipientsFile" ] [ "alerts" "recipientsFile" ])
+    (lib.mkRenamedOptionModule [ "watcher" "alert" "passwordFile" ] [ "alerts" "passwordFile" ])
+  ];
+
   options.watcher = {
     enable = mkEnableOption ''
       a cattleServer watch on every name in sites. Needs cattleServer's NixOS
@@ -77,10 +79,11 @@ in
       description = ''
         Path on the machine to cattleServer's whole configuration, for a watch
         whose names, addresses and alert are themselves a secret. It replaces
-        sites, hostAddresses, machineAddress, controls and alert, which must be
-        left unset, and services.cattleServer.settings. Its alert command
-        finds msmtp, sed and cat on the unit's PATH, never in the store: a store
-        path inside a secret keeps nothing alive.
+        sites, hostAddresses, machineAddress, controls, alertCommand and
+        alerts.recipientsFile, which must be left unset, and
+        services.cattleServer.settings. Its alert command finds msmtp, sed and
+        cat on the unit's PATH, never in the store: a store path inside a
+        secret keeps nothing alive.
       '';
     };
     machineAddress = mkOption {
@@ -108,30 +111,8 @@ in
       default = null;
       description = ''
         Shell command run once a name has failed its checks, with the detail on
-        standard input. Null logs and never alerts. Excludes alert.recipientsFile.
+        standard input. Null logs and never alerts. Excludes alerts.recipientsFile.
       '';
-    };
-    alert = {
-      recipientsFile = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        example = "/run/agenix/watcher-recipients";
-        description = ''
-          Path on the machine to mail headers naming who is alerted, such as
-          `Bcc: a@example.org, b@example.org`, and nothing else: no blank line.
-          Read when an alert goes out, so it can be a secret the service user
-          reads. Sent through the system msmtp account; every recipient sees
-          only `undisclosed-recipients`.
-        '';
-      };
-      passwordFile = mkOption {
-        type = types.nullOr types.str;
-        default = null;
-        description = ''
-          Path on the machine to the SMTP password, readable by the service
-          user. Null keeps the msmtp account's own.
-        '';
-      };
     };
   };
 
@@ -143,18 +124,14 @@ in
           message = "watcher writes services.cattleServer, so the host has to import cattleServer's NixOS module (inputs.cattleServer.nixosModules.default).";
         }
         {
-          assertion = cfg.alertCommand == null || cfg.alert.recipientsFile == null;
-          message = "watcher: set alertCommand or alert.recipientsFile, not both; the second builds the first.";
-        }
-        {
-          assertion = cfg.alert.passwordFile == null || cfg.alert.recipientsFile != null;
-          message = "watcher.alert.passwordFile is only read with alert.recipientsFile.";
+          assertion = cfg.alertCommand == null || config.alerts.recipientsFile == null;
+          message = "watcher: set alertCommand or alerts.recipientsFile, not both; the second builds the first.";
         }
         {
           assertion =
             cfg.settingsFile == null
-            || (watched == { } && cfg.alert.recipientsFile == null && cfg.alertCommand == null && cfg.controls == [ ]);
-          message = "watcher.settingsFile holds the whole watch, so sites, controls, alert and alertCommand would be ignored: leave them unset (a webStack app on this host adds its names to sites).";
+            || (watched == { } && config.alerts.recipientsFile == null && cfg.alertCommand == null && cfg.controls == [ ]);
+          message = "watcher.settingsFile holds the whole watch, so sites, controls, alertCommand and alerts.recipientsFile would be ignored: leave them unset (a webStack app on this host adds its names to sites).";
         }
       ];
     }

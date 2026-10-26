@@ -14,10 +14,11 @@ watcher = {
   hostAddresses = [ "203.0.113.10" ];
   sites."status.example.org" = { };         # one webStack does not serve
   sites."example.net".proxied = true;       # behind a proxy: resolves elsewhere
-  alert = {
-    recipientsFile = config.age.secrets.watcher-recipients.path;  # "Bcc: a@example.org, b@example.org"
-    passwordFile = config.age.secrets.smtp-password.path;
-  };
+};
+
+alerts = {
+  recipientsFile = config.age.secrets.watcher-recipients.path;  # "Bcc: a@example.org, b@example.org"
+  passwordFile = config.age.secrets.smtp-password.path;
 };
 ```
 
@@ -32,16 +33,14 @@ watcher = {
 | `hostAddresses` | what every name that is not proxied must resolve to. Empty accepts any, which leaves a name pointed somewhere else unnoticed |
 | `machineAddress` | the origin asked over plain http when a name fails, to tell the name from the machine. `127.0.0.1` by default, which is right only when the watcher runs on the machine it watches |
 | `controls` | URLs of sites that are not watched, asked first. When none answers, the pass logs `Cannot look`, judges nothing and leaves every count of bad checks alone. Empty by default; set, it needs a cattleServer that knows `controls` |
-| `alert.recipientsFile` | a file of mail headers naming who is alerted, and nothing else. With it the module writes the alert command itself, through the system's msmtp account |
-| `alert.passwordFile` | the SMTP password for that account, when the one in its configuration is not readable by the service user |
 | `settingsFile` | a secret holding cattleServer's whole configuration, for a watch whose names and addresses are secret too. Replaces every option above and `services.cattleServer.settings`; see below |
-| `alertCommand` | any other shell command, run once a name has failed its checks, with the detail on standard input. Null only logs. Excludes `alert.recipientsFile` |
+| `alertCommand` | any other shell command, run once a name has failed its checks, with the detail on standard input. Null only logs. Excludes [`alerts.recipientsFile`](./alerts.md) |
 
-## Who is alerted, and why the list is a file
+## Who is alerted
 
-The recipients are read when an alert goes out, not when the configuration is built, so the list can be a secret instead of sitting in the store where every user can read it — and adding a recipient is an edit of that secret, not of the host. The file holds headers, one or more, such as `Bcc: a@example.org, b@example.org`; `To:` and `Cc:` work as well. msmtp takes the recipients from them and replaces them with `To: undisclosed-recipients:;`, so nobody who receives an alert learns who else did.
+Whom the alert reaches, and with which SMTP password, is the host's [`alerts`](./alerts.md), shared with every module that alerts; `watcher.alert.recipientsFile` and `watcher.alert.passwordFile` still work, renamed to it with a warning.
 
-The subject names the machine that looked, then the URL and the verdict (`[watcher-host] https://example.org: name-does-not-resolve`), so two watchers on the same names can be told apart; the body is the detail. It has to be readable by `services.cattleServer.user`, which is what the service runs as.
+The subject names the machine that looked, then the URL and the verdict (`[watcher-host] https://example.org: name-does-not-resolve`), so two watchers on the same names can be told apart; the body is the detail. The recipients file has to be readable by `services.cattleServer.user`, which is what the service runs as.
 
 `sites` is an ordinary typed option, so it merges and overrides the NixOS way: a host adds to what webStack wrote, `sites."x".enable = false` removes one, and `lib.mkForce { … }` replaces the lot. A misspelt name in `sites` is not silently ignored: it becomes a name of its own, which fails to resolve on the first pass and says so.
 
