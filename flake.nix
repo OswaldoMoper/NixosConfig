@@ -41,6 +41,7 @@
         (import ./nixosModules/vscode.nix)
         (import ./nixosModules/vm.nix)
         (import ./nixosModules/watcher.nix)
+        (import ./nixosModules/sentinel.nix)
       ];
     hostDir = ./hosts;
     mkHost = hostName: nixpkgs.lib.nixosSystem {
@@ -97,6 +98,19 @@
             bash ${./tests/deploy-gate.sh} ${./scripts/deploy-gate.sh}
             touch "$out"
           '';
+
+      sentinel =
+        (nixpkgs.legacyPackages.${system}).runCommand "sentinel-test"
+          { nativeBuildInputs = [ (nixpkgs.legacyPackages.${system}).shellcheck ]; }
+          ''
+            shellcheck -s bash ${./tests/sentinel.sh}
+            bash ${./tests/sentinel.sh} ${./scripts/sentinel.sh}
+            touch "$out"
+          '';
+    };
+    packages.${system}.sentinel-vm-test = import ./tests/sentinel-vm.nix {
+      pkgs = nixpkgs.legacyPackages.${system};
+      module = ./nixosModules/sentinel.nix;
     };
     nixosModules = myLib.nixFilesIn ./nixosModules;
   };

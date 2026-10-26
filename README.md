@@ -116,6 +116,7 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
 │   ├── deployment.nix
 │   ├── graphical.nix
 │   ├── postgresql.nix
+│   ├── sentinel.nix                 ← mails each day what the machine has not shown before
 │   ├── tmux.nix                     ← status-bar colour as a which-box cue
 │   ├── user.nix                     ← multiuser module
 │   ├── vm.nix                       ← every host as a local QEMU machine
@@ -133,9 +134,12 @@ For details about the [NixOS-WSL](https://github.com/nix-community/NixOS-WSL) ba
 │   ├── live-checks.sh               ← pre-deploy and verify, over ssh or local
 │   ├── postgresql-rename.sh         ← move a database before setup creates it empty
 │   ├── rebuild-gate.sh              ← the same eight steps, on the machine itself
-│   └── run-local.sh                 ← the app stack as plain processes
+│   ├── run-local.sh                 ← the app stack as plain processes
+│   └── sentinel.sh                  ← one sentinel pass
 ├── tests/
-│   └── deploy-gate.sh               ← the deploy gate against fake ssh, nix and deploy
+│   ├── deploy-gate.sh               ← the deploy gate against fake ssh, nix and deploy
+│   ├── sentinel.sh                  ← sentinel against a fake journal, store and mail
+│   └── sentinel-vm.nix              ← sentinel on a booted machine (nix build .#sentinel-vm-test)
 └── docs/
 ```
 
@@ -411,6 +415,7 @@ Full documentation is available in the [`/docs/`](./docs/) directory:
 - [Web stack](./docs/modules/webstack.md)
 - [Watcher](./docs/modules/watcher.md)
 - [Alerts](./docs/modules/alerts.md)
+- [Sentinel](./docs/modules/sentinel.md)
 - [PostgreSQL](./docs/modules/postgresql.md)
 - [Deployment](./docs/modules/deployment.md)
 - [The two gates and their guards](./docs/scripts/guards.md)
