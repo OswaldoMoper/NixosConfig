@@ -18,13 +18,18 @@ let
     appConfig = { name = "watch-" + builtins.replaceStrings [ "." ] [ "-" ] name; structure = "/var/empty"; };
     databaseConfig = { name = "none"; structure = "none"; };
     serviceConfig = {
-      remoteHost = { hostName = cfg.machineAddress; userName = "nobody"; userHome = "/var/empty"; };
+      remoteHost = {
+        hostName = if site.machineAddress != null then site.machineAddress else cfg.machineAddress;
+        userName = "nobody";
+        userHome = "/var/empty";
+      };
       keyDirectory = { name = "none"; structure = "/var/empty"; };
       deleteFrequency = { unit = "Days"; times = 30; };
       watch = { url = "https://${name}"; }
-        // lib.optionalAttrs (!site.proxied && cfg.hostAddresses != [ ]) {
-          addresses = cfg.hostAddresses;
-        };
+        // (if site.addresses != null then { inherit (site) addresses; }
+            else lib.optionalAttrs (!site.proxied && cfg.hostAddresses != [ ]) {
+              addresses = cfg.hostAddresses;
+            });
     };
   };
 in
@@ -54,6 +59,25 @@ in
               The name resolves to a proxy in front of this machine rather than
               to the machine, so it is not held to hostAddresses: demanding the
               machine's address of it would alert on every pass.
+            '';
+          };
+          addresses = mkOption {
+            type = types.nullOr (types.listOf types.str);
+            default = null;
+            example = [ "203.0.113.20" ];
+            description = ''
+              Addresses this name must resolve to, for a name another machine
+              serves. Null holds it to hostAddresses unless proxied; it cannot
+              be empty, nor set on a proxied name.
+            '';
+          };
+          machineAddress = mkOption {
+            type = types.nullOr types.str;
+            default = null;
+            example = "203.0.113.20";
+            description = ''
+              Address asked over plain HTTP when this name fails, for a name
+              another machine serves. Null uses watcher.machineAddress.
             '';
           };
         };
@@ -121,7 +145,7 @@ in
 
   config = lib.mkMerge [
     {
-      assertions = lib.optionals cfg.enable [
+      assertions = lib.optionals cfg.enable ([
         {
           assertion = options ? services.cattleServer;
           message = "watcher writes services.cattleServer, so the host has to import cattleServer's NixOS module (inputs.cattleServer.nixosModules.default).";
@@ -132,7 +156,16 @@ in
             || (watched == { } && cfg.alertCommand == null && cfg.controls == [ ]);
           message = "watcher.settingsFile holds the whole watch, so sites, controls and alertCommand would be ignored: leave them unset (a webStack app on this host adds its names to sites).";
         }
-      ];
+      ] ++ lib.concatLists (lib.mapAttrsToList (name: site: [
+        {
+          assertion = site.addresses != [ ];
+          message = "watcher.sites.\"${name}\".addresses is empty, which no address matches, so it would alert on every pass: list the addresses, or leave it null.";
+        }
+        {
+          assertion = !(site.proxied && site.addresses != null);
+          message = "watcher.sites.\"${name}\" is proxied, which holds it to no address, and also lists addresses: keep one of the two.";
+        }
+      ]) watched));
     }
 
     (lib.optionalAttrs (options ? services.cattleServer) (mkIf (cfg.enable && cfg.settingsFile != null) {
