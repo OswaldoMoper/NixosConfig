@@ -32,6 +32,12 @@ case "$*" in
     if [ -e "$STATE/deployed" ]; then echo "${FAKE_MAJOR_AFTER-150004}"; else echo "${FAKE_MAJOR_BEFORE-150004}"; fi ;;
   *'/bin/schema plan'*) exit "${FAKE_PLAN_RC:-0}" ;;
   *'/bin/schema apply'*) exit "${FAKE_APPLY_RC:-0}" ;;
+  # FAKE_MARKER_RC=3 is a running system without the marker.
+  *deploy-gate/app-units*)
+    [ "${FAKE_MARKER_RC:-0}" = 0 ] || exit "$FAKE_MARKER_RC"
+    echo "${FAKE_MARKER-app}" ;;
+  *'systemctl stop'*) exit "${FAKE_STOP_RC:-0}" ;;
+  *'systemctl start'*) exit "${FAKE_START_RC:-0}" ;;
 esac
 exit 0
 EOF
@@ -278,6 +284,48 @@ for code in 2 3 4 5; do
   says "${apply_verdict[$code]}"; says "nothing was deployed"
   says "the machine still serves the old system, and the copy from 6d is there"
 done
+
+# 6a, 6e and 8: named SQL runs with what the machine runs stopped.
+named=(GATE_SCHEMA_OK=0003-a)
+run "named SQL stops what the machine runs, after the copy and before apply" "${named[@]}"
+passes
+in_order '/bin/schema plan' 'deploy-gate/app-units' '^census$' '^backup --once ' 'sudo systemctl stop app ?$' \
+  '/bin/schema apply' '^deploy '
+not_called 'systemctl start'; says "if this gate is cut before step 7, this starts them"
+run "without named SQL nothing is asked or stopped"
+passes; not_called 'deploy-gate/app-units|systemctl'
+run "what stops is what the machine runs, not the new system" "${named[@]}" FAKE_MARKER='legacy app'
+passes; called 'sudo systemctl stop legacy app ?$'
+run "a running system that names no app stops nothing" "${named[@]}" FAKE_MARKER=
+passes; not_called 'systemctl'
+run "a running system without the marker stops at 6a, before the census" "${named[@]}" FAKE_MARKER_RC=3
+stops_at 6a/8; not_called '^census$|^backup|systemctl'; says "GATE_RUNNING_UNITS"
+run "without the marker, GATE_RUNNING_UNITS is what stops" "${named[@]}" FAKE_MARKER_RC=3 \
+  GATE_RUNNING_UNITS='legacy app'
+passes; called 'sudo systemctl stop legacy app ?$'
+run "GATE_RUNNING_UNITS with a marker stops at 6a, before the census" "${named[@]}" GATE_RUNNING_UNITS=legacy
+stops_at 6a/8; not_called '^census$|^backup|systemctl'; says "remove it"
+run "GATE_RUNNING_UNITS without named SQL stops before 1/8" GATE_RUNNING_UNITS=legacy
+stops_before_1; not_called '^deploy'
+run "a marker it cannot read stops at 6a, before the census" "${named[@]}" FAKE_MARKER_RC=255
+stops_at 6a/8; not_called '^census$|^backup|systemctl'
+run "a stop that fails starts them again and stops at 6e, before apply" "${named[@]}" FAKE_STOP_RC=1
+stops_at 6e/8; in_order 'systemctl stop app' 'systemctl start app'; not_called '/bin/schema apply|^deploy'
+says "the database was not touched"
+for code in 2 3 4; do
+  run "apply exiting $code after a stop starts them again, and says the database did not change" \
+    "${named[@]}" FAKE_APPLY_RC=$code
+  stops_at 6e/8; in_order 'systemctl stop app' '/bin/schema apply' 'systemctl start app ?$'; not_called '^deploy'
+  says "the database did not change"; says "started again: app"; says "the machine still serves the old system"
+done
+run "a start that fails after apply says how to start them by hand" "${named[@]}" FAKE_APPLY_RC=4 FAKE_START_RC=1
+stops_at 6e/8; says "by hand: ssh admin@web.example sudo systemctl start app"
+says "the machine runs the old system with those stopped"
+run "another system live after a stop says how to start them" "${named[@]}" \
+  FAKE_LIVE=/nix/store/22222222222222222222222222222222-nixos-system-web
+stops_at 8/8; says "step 6e stopped app"; says "ssh admin@web.example sudo systemctl start app"
+run "a failed verify after a stop says how to start them" "${named[@]}" FAKE_VERIFY_RC=1
+stops_at 8/8; says "if one of them is still down"
 
 # 6c and 6d.
 run "a census that fails stops at 6c, before the backup" FAKE_CENSUS_RC=1

@@ -64,6 +64,11 @@ if [ -n "${GATE_SCHEMA_OK:-}" ] && [ "${GATE_SKIP_SCHEMA:-0}" = "1" ]; then
   printf 'say one or the other. Nothing was deployed.\n' >&2
   exit 1
 fi
+if [ -n "${GATE_RUNNING_UNITS:-}" ] && [ -z "${GATE_SCHEMA_OK:-}" ]; then
+  printf 'GATE_RUNNING_UNITS names what to stop before named SQL, and GATE_SCHEMA_OK names none.\n' >&2
+  printf 'Nothing was deployed.\n' >&2
+  exit 1
+fi
 # 6e changes the database, and only after 6d has a copy of it.
 if [ -n "${GATE_SCHEMA_BIN:-}" ] && [ -z "${GATE_BACKUP_BIN:-}" ]; then
   printf '%s declares a schema and no backup: step 6e would change the database\n' "$GATE_NODE" >&2
@@ -80,6 +85,27 @@ schema_run() {
   gate_ssh "$(printf '%q ' sudo -u "$GATE_SCHEMA_USER" "$GATE_SCHEMA_BIN" "$1" ${schema_names[@]+"${schema_names[@]}"})"
 }
 
+# What runs on the machine and is stopped before 6e when SQL is named; empty
+# otherwise. Read at 6a, from the system the machine runs.
+stop_units=()
+
+start_by_hand() {
+  printf 'ssh %s%s@%s sudo systemctl start %s' "${GATE_SSH_CONFIG:+-F $GATE_SSH_CONFIG }" \
+    "$GATE_HOST_USER" "$GATE_HOST_ADDR" "${stop_units[*]}"
+}
+
+# Leaves in `started` the line that says what came back, or how to bring it back.
+start_again() {
+  started="" start_failed=0
+  [ ${#stop_units[@]} -gt 0 ] || return 0
+  if gate_ssh "$(printf '%q ' sudo systemctl start "${stop_units[@]}")"; then
+    started="started again: ${stop_units[*]}"
+  else
+    started="could not start ${stop_units[*]} again; by hand: $(start_by_hand)"
+    start_failed=1
+  fi
+}
+
 # The program prints the detail; this is the verdict, and what to do about it.
 schema_stopped() {
   local rc="$1" verb="$2"
@@ -90,8 +116,17 @@ schema_stopped() {
     4) printf '\nthe schema needs what only a release can give (the program said which)\n' ;;
     *) printf '\nthe schema program exited %s\n' "$rc" ;;
   esac >&2
-  printf 'nothing was deployed\n' >&2
   if [ "$verb" = change ]; then
+    case "$rc" in
+      2|3|4) printf 'the database did not change: the schema program rolled back\n' >&2 ;;
+      *) printf 'the schema program did not say whether it rolled back\n' >&2 ;;
+    esac
+    [ -z "${started:-}" ] || printf '%s\n' "$started" >&2
+  fi
+  printf 'nothing was deployed\n' >&2
+  if [ "$verb" = change ] && [ "${start_failed:-0}" = 1 ]; then
+    printf 'the machine runs the old system with those stopped, and the copy from 6d is there\n' >&2
+  elif [ "$verb" = change ]; then
     printf 'the machine still serves the old system, and the copy from 6d is there\n' >&2
   fi
   exit 1
@@ -217,6 +252,36 @@ if [ -n "${GATE_SCHEMA_BIN:-}" ]; then
     schema_rc=0
     schema_run plan || schema_rc=$?
     [ "$schema_rc" -eq 0 ] || schema_stopped "$schema_rc" "look at"
+
+    # Named SQL can remove, rename or move what the running applications use,
+    # so they are stopped before 6e. What runs is what the machine's system
+    # says, which the one just built may no longer describe.
+    if [ ${#schema_names[@]} -gt 0 ]; then
+      marker=/run/current-system/etc/deploy-gate/app-units
+      marker_rc=0
+      running="$(gate_ssh "test -e $marker || exit 3; cat $marker")" || marker_rc=$?
+      case "$marker_rc" in
+        0)
+          if [ -n "${GATE_RUNNING_UNITS:-}" ]; then
+            printf 'the system the machine runs says what runs (%s), and GATE_RUNNING_UNITS\n' "${running:-nothing}" >&2
+            printf 'is only for a system that does not: remove it. Nothing was deployed.\n' >&2
+            exit 1
+          fi
+          read -r -a stop_units <<< "$running" ;;
+        3)
+          if [ -z "${GATE_RUNNING_UNITS:-}" ]; then
+            printf 'the system the machine runs does not say which applications run, and the\n' >&2
+            printf 'named SQL has to run with them stopped: name their units in\n' >&2
+            printf 'GATE_RUNNING_UNITS and run again. Nothing was deployed.\n' >&2
+            exit 1
+          fi
+          read -r -a stop_units <<< "$GATE_RUNNING_UNITS" ;;
+        *)
+          printf 'could not ask the machine what runs; nothing was deployed\n' >&2
+          exit 1 ;;
+      esac
+      printf '  to stop before 6e: %s\n' "${stop_units[*]:-nothing}"
+    fi
   fi
 fi
 
@@ -279,9 +344,23 @@ fi
 
 if [ -n "${GATE_SCHEMA_BIN:-}" ] && [ "${GATE_SKIP_SCHEMA:-0}" != "1" ]; then
   step "6e/8 change the schema"
+  if [ ${#stop_units[@]} -gt 0 ]; then
+    printf '  stopping %s; if this gate is cut before step 7, this starts them:\n' "${stop_units[*]}"
+    printf '    %s\n' "$(start_by_hand)"
+    gate_ssh "$(printf '%q ' sudo systemctl stop "${stop_units[@]}")" || {
+      start_again
+      printf '\ncould not stop %s; the database was not touched\n' "${stop_units[*]}" >&2
+      printf '%s\n' "$started" >&2
+      printf 'nothing was deployed\n' >&2
+      exit 1
+    }
+  fi
   schema_rc=0
   schema_run apply || schema_rc=$?
-  [ "$schema_rc" -eq 0 ] || schema_stopped "$schema_rc" change
+  if [ "$schema_rc" -ne 0 ]; then
+    start_again
+    schema_stopped "$schema_rc" change
+  fi
 fi
 
 step "7/8 deploy"
@@ -334,11 +413,20 @@ if [ "$live" != "$built" ]; then
   printf '  built: %s\n' "$built" >&2
   printf '  live:  %s\n' "${live:-<unreachable>}" >&2
   [ "$deploy_rc" -eq 0 ] || printf '  deploy exited %s\n' "$deploy_rc" >&2
+  if [ ${#stop_units[@]} -gt 0 ]; then
+    printf 'step 6e stopped %s and changed the database for the new system;\n' "${stop_units[*]}" >&2
+    printf 'they may not work on it. This starts them:\n  %s\n' "$(start_by_hand)" >&2
+    printf 'and the copy from 6d has the database as it was before.\n' >&2
+  fi
   exit 1
 fi
 
 if ! "$GATE_VERIFY"; then
   printf '\nthe host runs the new closure but does not verify clean\n' >&2
+  if [ ${#stop_units[@]} -gt 0 ]; then
+    printf 'step 6e stopped %s; if one of them is still down, this starts it:\n' "${stop_units[*]}" >&2
+    printf '  %s\n' "$(start_by_hand)" >&2
+  fi
   exit 1
 fi
 
