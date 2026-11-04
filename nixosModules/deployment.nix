@@ -127,6 +127,12 @@ with lib; {
             to be in that system's closure. A node with a schema needs a backup
             as well, and the gate refuses one without it.
 
+            With names, the gate stops what the machine runs before apply. If
+            apply ends with a code the program does not give, the gate reads
+            the names in a table schema_sql of the node's first database, so
+            the program has to record there each SQL it commits, in the same
+            transaction.
+
             Null runs neither, and the gate refuses GATE_SCHEMA_OK.
           '';
           type = types.nullOr (types.submodule {

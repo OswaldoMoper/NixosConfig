@@ -100,8 +100,8 @@ A node that declares `deployment.<node>.schema` gets two more actions, around th
 
 | | |
 | --- | --- |
-| `6a/8` | check that the program is in the system step 5 built, copy that system to the machine, and run `<program> plan <names>` there as `schema.user` |
-| `6e/8` | after `6d` has a copy, run `<program> apply <names>` |
+| `6a/8` | check that the program is in the system step 5 built, copy that system to the machine, and run `<program> plan <names>` there as `schema.user`; with names, also read what the machine runs and what `schema_sql` holds |
+| `6e/8` | after `6d` has a copy, stop what the machine runs if SQL is named, and run `<program> apply <names>` |
 
 The names are the SQL files whoever deploys allows this once, from `GATE_SCHEMA_OK`:
 
@@ -119,16 +119,40 @@ The gate only passes them on and reads the exit code; which change needs a name 
 | 4 | something only a release can give: a destructive change no SQL covers, an applied SQL that changed, a SQL that fails | stops |
 | other | | stops, with the code |
 
-The program prints the detail. After `6e` the old system is still serving, and the copy from `6d` is there.
+The program prints the detail. After a failed `6e` the old system is serving again, and the copy from `6d` is there; the gate says whether the database changed and what it started or put back.
 
-**`plan` goes before the census and the copy**, so a change nobody named stops the deploy without spending a backup. **`apply` goes after the copy** and right before the deploy: for a few seconds the old application runs on the changed schema, which is why a deploy should only add.
+**`plan` goes before the census and the copy**, so a change nobody named stops the deploy without spending a backup. **`apply` goes after the copy** and right before the deploy. Without names, the old application keeps running on the changed schema for a few seconds, which is why what needs no name only adds.
+
+#### With SQL named, what runs is stopped first
+
+Named SQL may remove, rename or move what the running applications use, so the gate stops them after `6d` and before `apply`. **What it stops is what the machine runs, not what the new system declares**: an application this deploy retires is not in the new system, and it keeps writing until it is stopped.
+
+The machine says what it runs through the system it booted into: every system that declares a `deployment.<node>` carries `/etc/deploy-gate/app-units`, the units of its apps, and the gate reads it from `/run/current-system` at `6a`. A system built before that file existed does not have it, and the gate stops at `6a` asking for the units in `GATE_RUNNING_UNITS`, once:
+
+```bash
+GATE_SCHEMA_OK="0003-move-x" GATE_RUNNING_UNITS="oldApp myApp" nix run .#deploy-myNode
+```
+
+`GATE_RUNNING_UNITS` on a machine whose system has the file stops the gate too, so a variable copied from that one deploy does not outlive it.
+
+Before stopping anything, `6e` prints the command that starts them by hand, for a gate cut before step 7. Step 7 starts what the new system declares; a retired application stays stopped. If stopping fails, the gate starts them again and stops, with the database untouched.
+
+If `apply` fails:
+
+| Exit | The database | The gate |
+| --- | --- | --- |
+| 2, 3 or 4 | the program rolled back | starts them again |
+| other (ssh cut, say) | asks `schema_sql` whether a named SQL went in since `6a` | went in: puts back the copy from `6d` with `--restore --database --replace`, then starts them. Did not: starts them. Could not ask, or the copy did not go back: leaves them stopped and prints how to look, put back and start |
+
+`schema_sql` is read in the node's first database, the census's, and the gate compares it with what it held at `6a`, since a name applied by an earlier deploy may be named again. **The time the applications are down, from stopping to step 7, is not measured**: it is `apply` plus the activation.
 
 **The program runs on the machine, from the new system.** The step that copies it there is the same copy deploy-rs makes in step 7, with the same flags, so step 7 finds it done. A program that is not in that system's closure stops the gate, since the machine would not have it.
 
-Three refusals, before step 1, deploy nothing:
+Four refusals, before step 1, deploy nothing:
 
 - `GATE_SCHEMA_OK` on a node with no `schema`, since nothing would apply the names;
 - `GATE_SCHEMA_OK` together with `GATE_SKIP_SCHEMA=1`;
+- `GATE_RUNNING_UNITS` without `GATE_SCHEMA_OK`, since nothing would be stopped;
 - a `schema` without a `backup`, since `6e` would change the database with no copy to go back to.
 
 A SQL that renames a table loses a name to the census as well: name it in `GATE_SHRINK_OK` too.

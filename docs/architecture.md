@@ -44,7 +44,7 @@ Three checks:
 
 **And one host is not a fleet.** The check only sees conflicts this repo's own configuration can produce, which is the narrow case. A module that unconditionally asserts `programs.nix-ld.enable = false` evaluates perfectly here — there is nothing to disagree with it — and breaks every consumer whose own module says `true`. Measured, and the reason an enable-shaped option may only ever turn something on.
 
-`lib/deploy.nix` is also only half exercised: `deployPkg` is never passed and the single local host declares no `deployment`, so `deploy.nodes` is empty and the **deploy** gate's wrapper is unreachable from here; its script is exercised only by `checks.deploy-gate`, with the environment the wrapper would export written by hand. The **rebuild** gate is not — every host gets one, so `rebuild-spartanWSL` is built and shellchecked.
+`lib/deploy.nix` is also only half exercised: `deployPkg` is never passed and the single local host declares no `deployment`, so `deploy.nodes` is empty and the **deploy** gate's wrapper is unreachable from here; its script is exercised only by `checks.deploy-gate`, with the environment the wrapper would export written by hand. For the same reason, the `/etc/deploy-gate/app-units` that `nixosModules/deployment.nix` writes changes no host here; a change to it, or to `lib/units.nix`, is measured against a consumer's hosts. The **rebuild** gate is not — every host gets one, so `rebuild-spartanWSL` is built and shellchecked.
 
 Worth knowing before trusting a green check on a change to `lib/` or a module.
 
@@ -65,7 +65,7 @@ None of the three pieces is required, and one appears only for a measured reason
 | | |
 | --- | --- |
 | `nixosModules/` | the product: options other flakes consume; a module that split keeps its pieces in `nixosModules/<mod>/` |
-| `lib/` | `default.nix` keeps `nixFilesIn` and `appModules` and re-exports the rest, one file per job: `deploy.nix` (`mkPreDeployApps`, `mkDeployNodes`), `vm.nix` (`mkVmApps`), `local.nix` (`mkLocalRunApps`) |
+| `lib/` | `default.nix` keeps `nixFilesIn` and `appModules` and re-exports the rest, one file per job: `deploy.nix` (`mkPreDeployApps`, `mkDeployNodes`), `vm.nix` (`mkVmApps`), `local.nix` (`mkLocalRunApps`); `units.nix` (`unitOf`, `appUnitsOf`) takes no arguments, so `nixosModules/deployment.nix` imports it too |
 | `scripts/` | the two gates, their guards, and the database rename |
 | `hosts/` | this repo's own machines — currently one |
 | `hmProfiles/` | per-user Home Manager profiles; searched via `hmProfiles.dirs`, and a consumer's own directory wins |

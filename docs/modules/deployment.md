@@ -99,7 +99,7 @@ The flake checks the deploy gate builds in its step 3, by name. Empty, the defau
 
 ### `deployment.<node>.schema`
 
-`{ package; user; }`: a program on the machine that changes the application's database schema, and the account the gate runs it as with `sudo`. The gate runs it with `plan` before the copy and with `apply` after it, each followed by the names in `GATE_SCHEMA_OK`, and stops before the deploy on any exit but 0. It has to be in the closure of the system the node deploys, and the node needs a `backup` as well. Null, the default, runs neither; see [the gate](../scripts/guards.md).
+`{ package; user; }`: a program on the machine that changes the application's database schema, and the account the gate runs it as with `sudo`. The gate runs it with `plan` before the copy and with `apply` after it, each followed by the names in `GATE_SCHEMA_OK`, and stops before the deploy on any exit but 0. It has to be in the closure of the system the node deploys, and the node needs a `backup` as well. When names are given, the gate stops what the machine runs before `apply`, and after an `apply` that ends without the program's verdict it reads a table `schema_sql`, with a `name` column, in the node's first database: the program has to record there each SQL it commits, in the same transaction. Null, the default, runs neither; see [the gate](../scripts/guards.md).
 
 ## How the flake processes deployments
 
@@ -174,6 +174,7 @@ The gate that [`lib.mkPreDeployApps`](../scripts/guards.md) generates relies on 
 - it reads the activation path
 - it reads `checks`, `backup`, `census` and `schema`, which decide step 3, step `6d`, steps `6c`, `8b` and `8c`, and steps `6a` and `6e`
 - it reads `fastConnection`, which decides how step `6a` copies the system
+- it reads `/etc/deploy-gate/app-units`, which this module writes into every system that declares a `deployment.<node>`: the units of the host's apps, by the same rule as the gate's own list (`appUnitsOf`, `lib/units.nix`). Step `6a` reads it from the system the machine runs, which may name an app the new system no longer has
 
 So this module is what makes a plain deploy, a PostgreSQL major upgrade through the backup, and a `GATE_MIGRATE=1` one for a node without a backup possible at all.
 
