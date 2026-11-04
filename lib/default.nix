@@ -1,7 +1,7 @@
 { lib }:
 
 let
-  inherit (import ./units.nix) unitOf;
+  inherit (import ./units.nix) unitOf appUnitsOf;
 in
 {
   nixFilesIn =
@@ -32,6 +32,6 @@ in
       }
     ) withProfile;
 }
-// import ./deploy.nix { inherit lib unitOf; }
+// import ./deploy.nix { inherit lib appUnitsOf; }
 // import ./local.nix { inherit lib unitOf; }
 // import ./vm.nix { inherit lib; }

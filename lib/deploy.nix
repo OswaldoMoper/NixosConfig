@@ -1,4 +1,4 @@
-{ lib, unitOf }:
+{ lib, appUnitsOf }:
 
 {
   mkPreDeployApps =
@@ -28,7 +28,7 @@
           apps = if cfg ? webStack then cfg.webStack.tunnel.apps ++ cfg.webStack.nginx.apps else [ ];
           hmUsers = if cfg ? myUsers then lib.filter (n: cfg.myUsers.${n}.home.enable) (lib.attrNames cfg.myUsers) else [ ];
 
-          appUnits = lib.filter (u: u != null) (map unitOf apps);
+          appUnits = appUnitsOf cfg;
           units =
             appUnits
             ++ map (u: "home-manager-${u}") hmUsers
