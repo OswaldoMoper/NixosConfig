@@ -1,4 +1,4 @@
-{ lib, ... }:
+{ config, lib, ... }:
 with lib; {
   options.deployment = mkOption {
     description = "Configuración cruda para deploy-rs";
@@ -172,5 +172,11 @@ with lib; {
         };
       };
     });
+  };
+
+  # The gate reads it from the system the machine runs, which the new one may no longer describe.
+  config = mkIf (config.deployment != { }) {
+    environment.etc."deploy-gate/app-units".text =
+      concatStringsSep " " ((import ../lib/units.nix).appUnitsOf config) + "\n";
   };
 }
