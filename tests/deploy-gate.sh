@@ -31,7 +31,21 @@ case "$*" in
   *server_version_num*)
     if [ -e "$STATE/deployed" ]; then echo "${FAKE_MAJOR_AFTER-150004}"; else echo "${FAKE_MAJOR_BEFORE-150004}"; fi ;;
   *'/bin/schema plan'*) exit "${FAKE_PLAN_RC:-0}" ;;
-  *'/bin/schema apply'*) exit "${FAKE_APPLY_RC:-0}" ;;
+  *'/bin/schema apply'*)
+    touch "$STATE/applied"
+    [ "${FAKE_APPLY_COMMITS:-0}" = 0 ] || touch "$STATE/committed"
+    exit "${FAKE_APPLY_RC:-0}" ;;
+  # The registry: FAKE_REGISTRY before apply, plus FAKE_REGISTRY_COMMITTED once
+  # an apply committed; FAKE_REGISTRY_AFTER_RC makes it unreadable after apply.
+  *to_regclass*|*FROM*schema_sql*)
+    if [ -e "$STATE/applied" ] && [ "${FAKE_REGISTRY_AFTER_RC:-0}" != 0 ]; then exit "$FAKE_REGISTRY_AFTER_RC"; fi
+    [ "${FAKE_REGISTRY_RC:-0}" = 0 ] || exit "$FAKE_REGISTRY_RC"
+    case "$*" in
+      *to_regclass*) echo "${FAKE_REGISTRY_EXISTS-t}" ;;
+      *)
+        printf '%b' "${FAKE_REGISTRY-}"
+        [ ! -e "$STATE/committed" ] || printf '%b' "${FAKE_REGISTRY_COMMITTED-}" ;;
+    esac ;;
   # FAKE_MARKER_RC=3 is a running system without the marker.
   *deploy-gate/app-units*)
     [ "${FAKE_MARKER_RC:-0}" = 0 ] || exit "$FAKE_MARKER_RC"
@@ -118,6 +132,7 @@ base=(
   GATE_CENSUS="$bin/census" GATE_CENSUS_ROWS=users GATE_APP_UNITS=app
   GATE_BACKUP_BIN="$bin/backup" GATE_BACKUP_APP=app GATE_BACKUP_CONFIG=/etc/backup.json
   GATE_SCHEMA_BIN=/nix/store/11111111111111111111111111111111-schema/bin/schema GATE_SCHEMA_USER=app
+  GATE_SCHEMA_DATABASE=appdb
   GATE_FAST_CONNECTION=0
   FAKE_CENSUS_BEFORE="$census"
 )
@@ -326,6 +341,35 @@ run "another system live after a stop says how to start them" "${named[@]}" \
 stops_at 8/8; says "step 6e stopped app"; says "ssh admin@web.example sudo systemctl start app"
 run "a failed verify after a stop says how to start them" "${named[@]}" FAKE_VERIFY_RC=1
 stops_at 8/8; says "if one of them is still down"
+
+# 6e: an exit the schema program does not give, read against its registry.
+run "named SQL reads the registry at 6a, in the first database, before the census" "${named[@]}"
+passes; in_order 'deploy-gate/app-units' 'psql -tAX -d appdb .*to_regclass' 'FROM.*schema_sql' '^census$'
+run "a registry it cannot read at 6a stops there, before the census" "${named[@]}" FAKE_REGISTRY_RC=1
+stops_at 6a/8; not_called '^census$|^backup|systemctl'
+run "a registry that does not exist yet counts as empty" "${named[@]}" FAKE_REGISTRY_EXISTS=f
+passes; not_called 'FROM.*schema_sql'
+run "apply cut before committing starts them again" "${named[@]}" FAKE_APPLY_RC=255
+stops_at 6e/8; in_order 'systemctl stop app' '/bin/schema apply' 'FROM.*schema_sql' 'systemctl start app'
+not_called '--restore'; says "schema_sql does not have the named SQL"; says "started again: app"
+run "apply cut after committing puts back the copy from 6d, then starts them" "${named[@]}" FAKE_APPLY_RC=255 \
+  FAKE_APPLY_COMMITS=1 FAKE_REGISTRY_COMMITTED='0003-a\n'
+stops_at 6e/8
+in_order 'systemctl stop app' '/bin/schema apply' 'FROM.*schema_sql' \
+  '^backup --restore app --database --replace /etc/backup\.json$' 'systemctl start app'
+says "the named SQL was committed (schema_sql has 0003-a)"; says "on the copy from 6d"
+run "a name an earlier deploy applied is not taken for this one" "${named[@]}" FAKE_APPLY_RC=255 FAKE_REGISTRY='0003-a\n'
+stops_at 6e/8; not_called '--restore'; called 'systemctl start app'
+run "a restore that fails after a commit leaves them stopped, with both commands" "${named[@]}" FAKE_APPLY_RC=255 \
+  FAKE_APPLY_COMMITS=1 FAKE_REGISTRY_COMMITTED='0003-a\n' FAKE_RESTORE_RC=1
+stops_at 6e/8; not_called 'systemctl start'; says "--restore app --database --replace /etc/backup.json"
+says "ssh admin@web.example sudo systemctl start app"; says "with its applications stopped"
+run "a registry it cannot read after apply leaves them stopped, with the commands" "${named[@]}" FAKE_APPLY_RC=255 \
+  FAKE_REGISTRY_AFTER_RC=1
+stops_at 6e/8; not_called 'systemctl start|--restore'; says "whether the database changed is not known"
+says "psql -d appdb -c 'SELECT name FROM schema_sql'"; says "--database --replace"; says "systemctl start app"
+run "apply cut without named SQL reads nothing and starts nothing" FAKE_APPLY_RC=255
+stops_at 6e/8; not_called 'schema_sql|systemctl'; says "did not say whether it rolled back"
 
 # 6c and 6d.
 run "a census that fails stops at 6c, before the backup" FAKE_CENSUS_RC=1

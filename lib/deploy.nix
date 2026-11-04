@@ -218,6 +218,9 @@
                 ${lib.optionalString ((node.schema or null) != null) ''
                   export GATE_SCHEMA_BIN=${lib.escapeShellArg (lib.getExe node.schema.package)}
                   export GATE_SCHEMA_USER=${lib.escapeShellArg node.schema.user}
+                  export GATE_SCHEMA_DATABASE=${
+                    lib.escapeShellArg (lib.optionalString (databases != [ ]) (lib.head databases))
+                  }
                 ''}
                 export GATE_FAST_CONNECTION=${if node.fastConnection or false then "1" else "0"}
 

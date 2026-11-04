@@ -106,6 +106,25 @@ start_again() {
   fi
 }
 
+# The names in the schema program's registry, one per line; none when the
+# table does not exist yet. Fails when it could not ask.
+registry_names() {
+  local exists
+  exists="$(gate_ssh "$(printf '%q ' sudo -u postgres psql -tAX -d "${GATE_SCHEMA_DATABASE:-}" \
+    -c "SELECT to_regclass('public.schema_sql') IS NOT NULL")")" || return 1
+  case "$exists" in
+    f) return 0 ;;
+    t) gate_ssh "$(printf '%q ' sudo -u postgres psql -tAX -d "${GATE_SCHEMA_DATABASE:-}" \
+         -c 'SELECT name FROM schema_sql')" ;;
+    *) return 1 ;;
+  esac
+}
+
+restore_by_hand() {
+  printf '%s --restore %s --database --replace %s' "${GATE_BACKUP_BIN:-}" "${GATE_BACKUP_APP:-}" \
+    "${GATE_BACKUP_CONFIG:-}"
+}
+
 # The program prints the detail; this is the verdict, and what to do about it.
 schema_stopped() {
   local rc="$1" verb="$2"
@@ -117,19 +136,68 @@ schema_stopped() {
     *) printf '\nthe schema program exited %s\n' "$rc" ;;
   esac >&2
   if [ "$verb" = change ]; then
-    case "$rc" in
-      2|3|4) printf 'the database did not change: the schema program rolled back\n' >&2 ;;
-      *) printf 'the schema program did not say whether it rolled back\n' >&2 ;;
-    esac
-    [ -z "${started:-}" ] || printf '%s\n' "$started" >&2
+    printf '%s\n' "$db_said" >&2
+    [ -z "$advice" ] || printf '%s\n' "$advice" >&2
   fi
   printf 'nothing was deployed\n' >&2
-  if [ "$verb" = change ] && [ "${start_failed:-0}" = 1 ]; then
-    printf 'the machine runs the old system with those stopped, and the copy from 6d is there\n' >&2
-  elif [ "$verb" = change ]; then
-    printf 'the machine still serves the old system, and the copy from 6d is there\n' >&2
-  fi
+  [ "$verb" != change ] || printf '%s\n' "$machine_said" >&2
   exit 1
+}
+
+# After a failed apply: whether the database changed, the copy from 6d put
+# back when the named SQL was committed, and what was stopped started again
+# -- unless that would run the old applications on a database nobody can vouch
+# for. Leaves the verdict in db_said, advice and machine_said.
+after_apply() {
+  local rc="$1" after="" new="" n
+  advice="" machine_said='the machine still serves the old system, and the copy from 6d is there'
+  case "$rc" in
+    2|3|4) db_said='the database did not change: the schema program rolled back' ;;
+    *)
+      db_said='the schema program did not say whether it rolled back'
+      if [ ${#schema_names[@]} -gt 0 ]; then
+        if ! after="$(registry_names)"; then
+          db_said="$db_said, and schema_sql could not be read: whether the database changed is not known"
+          advice="$(printf 'this lists the names the database has:\n  %s %s\n' \
+            "ssh ${GATE_SSH_CONFIG:+-F $GATE_SSH_CONFIG }${GATE_HOST_USER}@${GATE_HOST_ADDR}" \
+            "sudo -u postgres psql -d ${GATE_SCHEMA_DATABASE:-} -c 'SELECT name FROM schema_sql'")"
+          advice="$advice"$'\n'"$(printf 'if it has %s, the database changed and this puts back the copy from 6d:\n  %s' \
+            "${schema_names[*]}" "$(restore_by_hand)")"
+          leave_stopped
+          return 0
+        fi
+        for n in "${schema_names[@]}"; do
+          if grep -qxF -- "$n" <<< "$after" && ! grep -qxF -- "$n" <<< "${registry_before:-}"; then
+            new="$new $n"
+          fi
+        done
+        if [ -z "$new" ]; then
+          db_said='the database did not change: schema_sql does not have the named SQL'
+        elif "$GATE_BACKUP_BIN" --restore "$GATE_BACKUP_APP" --database --replace "$GATE_BACKUP_CONFIG"; then
+          db_said="the named SQL was committed (schema_sql has$new): the copy from 6d was put back"
+          machine_said='the machine still serves the old system, on the copy from 6d'
+        else
+          db_said="the named SQL was committed (schema_sql has$new), and putting back the copy from 6d did not complete"
+          advice="$(printf 'this puts it back:\n  %s' "$(restore_by_hand)")"
+          leave_stopped
+          return 0
+        fi
+      fi ;;
+  esac
+  start_again
+  advice="$started"
+  if [ "$start_failed" = 1 ]; then
+    machine_said='the machine runs the old system with those stopped, and the copy from 6d is there'
+  fi
+}
+
+# For a database the old applications may not read: they stay stopped, and
+# the advice ends with the command that starts them once it is put right.
+leave_stopped() {
+  [ ${#stop_units[@]} -gt 0 ] || return 0
+  advice="$advice"$'\n'"left stopped: ${stop_units[*]}; once the database is right, this starts them:"
+  advice="$advice"$'\n'"  $(start_by_hand)"
+  machine_said='the machine runs the old system with its applications stopped, and the copy from 6d is there'
 }
 
 step "1/8 is this checkout current"
@@ -281,6 +349,13 @@ if [ -n "${GATE_SCHEMA_BIN:-}" ]; then
           exit 1 ;;
       esac
       printf '  to stop before 6e: %s\n' "${stop_units[*]:-nothing}"
+
+      # What the registry holds now, so that after a failed apply a name found
+      # there can be told apart from one applied by an earlier deploy.
+      registry_before="$(registry_names)" || {
+        printf 'could not read schema_sql in %s; nothing was deployed\n' "${GATE_SCHEMA_DATABASE:-<no database>}" >&2
+        exit 1
+      }
     fi
   fi
 fi
@@ -358,7 +433,7 @@ if [ -n "${GATE_SCHEMA_BIN:-}" ] && [ "${GATE_SKIP_SCHEMA:-0}" != "1" ]; then
   schema_rc=0
   schema_run apply || schema_rc=$?
   if [ "$schema_rc" -ne 0 ]; then
-    start_again
+    after_apply "$schema_rc"
     schema_stopped "$schema_rc" change
   fi
 fi
