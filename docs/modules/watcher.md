@@ -46,13 +46,19 @@ The subject names the machine that looked, then the URL and the verdict (`[watch
 
 The cadence is cattleServer's own, `services.cattleServer.settings.checkEvery`, and so is how many consecutive failures raise an alert.
 
+## One alert per machine
+
+A machine that goes down takes every name it serves with it, and each would alert. The alert command, whether the mail or `alertCommand`, therefore runs at most once per machine every 30 minutes, the machine of a name being its `machineAddress`. The alert that goes out ends with a line naming the machine and the time until which its other names stay quiet; each of those leaves a line in the journal, tagged `watch-alert`, with the name, the machine and the two times.
+
+A machine is marked, in a file under `services.cattleServer.stateDir`, only when the command succeeded, so an alert that failed to go out silences nothing. A different failure of the same machine inside those 30 minutes is not alerted either: the line at the end of the alert is the reminder to look at the journal.
+
 ## The whole watch as a secret
 
 `settingsFile` hands cattleServer a configuration that never enters the store, through its own `services.cattleServer.settingsFile`, which arrives as a systemd credential. Everything the other options would render goes inside it — the sites, the addresses, `controls`, the cadence and the alert command — so they must be left unset, and an assertion says so; [`alerts`](./alerts.md) is not read, so the host can keep it for other modules. A webStack app on the same host adds its names to `sites`, which trips that assertion: such a host watches with the ordinary options.
 
 The alert command inside the file calls `msmtp`, `sed` and `cat` **by name**, and the module puts them on the unit's `PATH`. A store path written into a secret keeps nothing alive, so after the next collection the command would point at nothing and the alert would fail at the one moment it matters. The mail account can travel the same way, as an `msmtprc` passed with `msmtp -C`.
 
-The file is best produced rather than written: declare the watch with the ordinary options on a scratch copy of the host, read `services.cattleServer.settings` as JSON, point its `alertCommand` at bare names, and encrypt the result.
+The file is best produced rather than written: declare the watch with the ordinary options on a scratch copy of the host, read `services.cattleServer.settings` as JSON, replace its `alertCommand` with the plain command written with bare names, and encrypt the result. The `alertCommand` the options render wraps the command to alert once per machine, with store paths the secret cannot keep alive, so a watch held in a secret alerts for every name.
 
 ## This library does not bring cattleServer
 

@@ -9,17 +9,32 @@ let
   mailed = config.alerts.mailCommand
     "printf 'Subject: [%s] %s: %s\\n\\n' '${config.networking.hostName}' \"\${CATTLE_URL:-$CATTLE_APP}\" \"$CATTLE_VERDICT\"";
 
+  appName = name: "watch-" + builtins.replaceStrings [ "." ] [ "-" ] name;
+  machineOf = site: if site.machineAddress != null then site.machineAddress else cfg.machineAddress;
+
+  machines = pkgs.writeText "watch-alert-machines"
+    (lib.concatLines (lib.mapAttrsToList (name: site: "${appName name} ${machineOf site}") watched));
+
+  perMachine = alert: lib.concatStringsSep " " [
+    "PATH=${lib.makeBinPath [ pkgs.coreutils pkgs.util-linux ]}:$PATH"
+    (pkgs.writeShellScript "watch-alert" (builtins.readFile ../scripts/watch-alert.sh))
+    machines
+    "${config.services.cattleServer.stateDir}/watch-alert"
+    (toString (30 * 60))
+    (pkgs.writeShellScript "watch-alert-command" alert)
+  ];
+
   command =
-    if cfg.alertCommand != null then cfg.alertCommand
-    else if config.alerts.recipientsFile != null then mailed
+    if cfg.alertCommand != null then perMachine cfg.alertCommand
+    else if config.alerts.recipientsFile != null then perMachine mailed
     else null;
 
   entry = name: site: {
-    appConfig = { name = "watch-" + builtins.replaceStrings [ "." ] [ "-" ] name; structure = "/var/empty"; };
+    appConfig = { name = appName name; structure = "/var/empty"; };
     databaseConfig = { name = "none"; structure = "none"; };
     serviceConfig = {
       remoteHost = {
-        hostName = if site.machineAddress != null then site.machineAddress else cfg.machineAddress;
+        hostName = machineOf site;
         userName = "nobody";
         userHome = "/var/empty";
       };
@@ -110,6 +125,8 @@ in
         must be left unset, and services.cattleServer.settings; alerts is not
         read. Its alert command finds msmtp, sed and cat on the unit's PATH,
         never in the store: a store path inside a secret keeps nothing alive.
+        It runs for every name that fails: only the options below alert once
+        per machine.
       '';
     };
     machineAddress = mkOption {
@@ -138,7 +155,10 @@ in
       description = ''
         Shell command run once a name has failed its checks, with the detail on
         standard input. Used instead of alerts when set; null with no
-        alerts.recipientsFile logs and never alerts.
+        alerts.recipientsFile logs and never alerts. Either one runs at most
+        once per machine every 30 minutes: its input ends with a line saying
+        so, and a name whose machine already alerted leaves a line in the
+        journal instead.
       '';
     };
   };
