@@ -116,6 +116,11 @@
             bash ${./tests/watch-alert.sh} ${./scripts/watch-alert.sh}
             touch "$out"
           '';
+
+      watcher = import ./tests/watcher.nix {
+        inherit nixpkgs;
+        pkgs = nixpkgs.legacyPackages.${system};
+      };
     };
     packages.${system}.sentinel-vm-test = import ./tests/sentinel-vm.nix {
       pkgs = nixpkgs.legacyPackages.${system};
