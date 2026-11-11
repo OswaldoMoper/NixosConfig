@@ -107,6 +107,15 @@
             bash ${./tests/sentinel.sh} ${./scripts/sentinel.sh}
             touch "$out"
           '';
+
+      watch-alert =
+        (nixpkgs.legacyPackages.${system}).runCommand "watch-alert-test"
+          { nativeBuildInputs = [ (nixpkgs.legacyPackages.${system}).shellcheck ]; }
+          ''
+            shellcheck -s bash ${./tests/watch-alert.sh}
+            bash ${./tests/watch-alert.sh} ${./scripts/watch-alert.sh}
+            touch "$out"
+          '';
     };
     packages.${system}.sentinel-vm-test = import ./tests/sentinel-vm.nix {
       pkgs = nixpkgs.legacyPackages.${system};
