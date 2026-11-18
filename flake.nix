@@ -99,6 +99,15 @@
             touch "$out"
           '';
 
+      live-checks =
+        (nixpkgs.legacyPackages.${system}).runCommand "live-checks-test"
+          { nativeBuildInputs = [ (nixpkgs.legacyPackages.${system}).shellcheck ]; }
+          ''
+            shellcheck -s bash ${./tests/live-checks.sh}
+            bash ${./tests/live-checks.sh} ${./scripts/live-checks.sh}
+            touch "$out"
+          '';
+
       sentinel =
         (nixpkgs.legacyPackages.${system}).runCommand "sentinel-test"
           { nativeBuildInputs = [ (nixpkgs.legacyPackages.${system}).shellcheck ]; }

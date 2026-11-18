@@ -94,6 +94,8 @@ GATE_SHRINK_OK="old_table" nix run .#deploy-myNode
 
 The census counts the top level of each `census.files` directory, so an entry lost further down is not seen, and not put back.
 
+It reads those directories with `sudo -n`, as it reads the tables and the rows, so the account the gate connects as needs passwordless `sudo` on the machine, not membership in the application's group. A directory that is not there counts as no entries. One that is there and cannot be listed, or a `sudo` that refuses, counts as `unknown`: an unanswered question, never a loss, so it is reported after the deploy and stops nothing.
+
 ### `GATE_SCHEMA_OK` — the schema changes before the deploy
 
 A node that declares `deployment.<node>.schema` gets two more actions, around the copy:

@@ -39,6 +39,7 @@ Six checks:
 | `checks.hosts` | forces `system.build.toplevel.drvPath` for **every** host in `hosts/`. That is an *evaluation*, not a build: assertions fire, option types are enforced, and a module that no longer evaluates fails here rather than in the consuming flake after a push |
 | `checks.scripts` | shellcheck over all of `scripts/` |
 | `checks.deploy-gate` | runs `scripts/deploy-gate.sh` through `tests/deploy-gate.sh`, against fake ssh, nix, deploy, guards, census and backup: where each case stops and what it ran |
+| `checks.live-checks` | runs the census of `scripts/live-checks.sh` through `tests/live-checks.sh`, on this machine against a fake `sudo`: what it prints for a directory with entries, an empty one, a missing one and one it cannot list |
 | `checks.sentinel` | runs `scripts/sentinel.sh` through `tests/sentinel.sh`, against a fake journal, `systemctl`, `nix-store` and mail: what each pass mails and what it learns |
 | `checks.watch-alert` | runs `scripts/watch-alert.sh` through `tests/watch-alert.sh`, against a fake alert command and logger: which failing name alerts, which stays quiet and what is marked |
 | `checks.watcher` | evaluates `watcher` through `tests/watcher.nix`, against a stand-in for cattleServer's module: the assertions on a site's addresses fire, and the alert command handed over is the wrapped one, with its table of machines |

@@ -173,9 +173,17 @@ if [ "$mode" = "census" ]; then
 
   dirs=()
   if [ -n "${LIVE_CENSUS_FILES:-}" ]; then read -ra dirs <<<"$LIVE_CENSUS_FILES"; fi
+  # Through sudo, like the tables and the rows. A directory that is not there
+  # has no entries; one that is there and cannot be listed is not an answer.
   for d in ${dirs[@]+"${dirs[@]}"}; do
-    n="$(sshq "ls -A ${d} 2>/dev/null | wc -l" 2>/dev/null | tr -d '[:space:]' || true)"
-    printf 'files %s %s\n' "$d" "${n:-unknown}"
+    if listing="$(sshq "sudo -n ls -A ${d}" 2>/dev/null)"; then
+      n="$(printf '%s' "$listing" | grep -c '' || true)"
+    elif sshq "sudo -n true" 2>/dev/null && ! sshq "sudo -n test -e ${d}" 2>/dev/null; then
+      n=0
+    else
+      n=unknown
+    fi
+    printf 'files %s %s\n' "$d" "$n"
   done
   exit 0
 fi
