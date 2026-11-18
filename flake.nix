@@ -132,6 +132,12 @@
       };
 
       rate-limit = import ./tests/rate-limit.nix { pkgs = nixpkgs.legacyPackages.${system}; };
+
+      modules-alone = import ./tests/modules-alone.nix {
+        inherit nixpkgs inputs;
+        pkgs = nixpkgs.legacyPackages.${system};
+        modules = myLib.nixFilesIn ./nixosModules;
+      };
     };
     packages.${system}.sentinel-vm-test = import ./tests/sentinel-vm.nix {
       pkgs = nixpkgs.legacyPackages.${system};

@@ -44,6 +44,7 @@ Six checks:
 | `checks.watch-alert` | runs `scripts/watch-alert.sh` through `tests/watch-alert.sh`, against a fake alert command and logger: which failing name alerts, which stays quiet and what is marked |
 | `checks.watcher` | evaluates `watcher` through `tests/watcher.nix`, against a stand-in for cattleServer's module: the assertions on a site's addresses fire, and the alert command handed over is the wrapped one, with its table of machines |
 | `checks.rate-limit` | evaluates an app's `rateLimit` through `webStack`'s own type, in `tests/rate-limit.nix`: what a `kind` fills in, that a number set by hand wins, that without a `kind` both numbers are still required, and that nginx gets them |
+| `checks.modules-alone` | evaluates each module in `nixosModules/` on its own, on a minimal container system, through `tests/modules-alone.nix`. A module gets only the outside modules and arguments its entry in `needs` lists (`common` and `user`: home-manager; `common`: `inputs`), so one that uses another library module without importing it fails here instead of in a consumer that imports fewer modules than `checks.hosts` does. Evaluation only, like `hosts` |
 
 `hosts` discards the string context on purpose, so nothing is built. A package that fails to compile is still invisible here.
 
