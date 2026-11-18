@@ -130,6 +130,8 @@
         inherit nixpkgs;
         pkgs = nixpkgs.legacyPackages.${system};
       };
+
+      rate-limit = import ./tests/rate-limit.nix { pkgs = nixpkgs.legacyPackages.${system}; };
     };
     packages.${system}.sentinel-vm-test = import ./tests/sentinel-vm.nix {
       pkgs = nixpkgs.legacyPackages.${system};

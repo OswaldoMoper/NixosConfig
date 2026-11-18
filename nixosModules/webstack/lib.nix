@@ -58,6 +58,11 @@ rec {
     };
   };
 
+  rateLimitKinds = {
+    login = { perMinute = 30; burst = 20; };
+    mail = { perMinute = 1; burst = 3; };
+  };
+
   rateLimitZone = app: name: i: "${app.name}-${name}-${toString i}";
 
   rateLimits = lib.concatMap (app: lib.mapAttrsToList (name: limit: { inherit app name limit; }) app.rateLimit);
@@ -401,8 +406,19 @@ rec {
         '';
       };
       rateLimit = mkOption {
-        type = types.attrsOf (types.submodule {
+        type = types.attrsOf (types.submodule ({ config, ... }: {
           options = {
+            kind = mkOption {
+              type = types.nullOr (types.enum (lib.attrNames rateLimitKinds));
+              default = null;
+              example = "mail";
+              description = ''
+                Fills perMinute and burst for a common kind of route, unless
+                they are set: "login" 30 and 20, for routes that sign in;
+                "mail" 1 and 3, for routes that send an email. Null leaves both
+                to be set.
+              '';
+            };
             paths = mkOption {
               type = types.listOf types.str;
               example = [ "/signup" "/password-reset" ];
@@ -428,7 +444,9 @@ rec {
               description = "Addresses or CIDR ranges this limit never counts.";
             };
           };
-        });
+          config = lib.genAttrs [ "perMinute" "burst" ] (n:
+            lib.mkIf (config.kind != null) (lib.mkDefault rateLimitKinds.${config.kind}.${n}));
+        }));
         default = { };
         example = lib.literalExpression ''
           {
