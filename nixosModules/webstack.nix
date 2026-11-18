@@ -376,10 +376,9 @@ in
             name = app.name;
             value = {
               description = "${app.name} web";
-              # `after` without `requires`: if postgres fails the app still starts
-              # and retries, instead of waiting for an event systemd won't send.
               after = [ "network.target" ]
                 ++ lib.optional (app.database != null) "postgresql.service";
+              wants = lib.optional (app.database != null) "postgresql.service";
               wantedBy = [ "multi-user.target" ];
 
               stopIfChanged = false;

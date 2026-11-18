@@ -310,7 +310,9 @@ systemd reads at start time and that never enters the store:
 
 ### `database`, and the pair that has to stay in step
 
-`database` declares that the app needs the host's PostgreSQL. It orders the unit after `postgresql.service`, lets the pre-deploy checks confirm the names really reach the app through its environment, and writes the pair into [`postgresql.ensure`](./postgresql.md), which is what actually creates the database and the role and transfers ownership.
+`database` declares that the app needs the host's PostgreSQL. The unit wants `postgresql.service` and starts after it, lets the pre-deploy checks confirm the names really reach the app through its environment, and writes the pair into [`postgresql.ensure`](./postgresql.md), which is what actually creates the database and the role and transfers ownership.
+
+`after` alone only orders jobs that are in the same transaction. A switch that changes both PostgreSQL and the app stops what changed, restarts it, and only at the end starts what is stopped, so the app's restart would find PostgreSQL down, fail on every retry and end in `start-limit-hit`. `wants` puts PostgreSQL's start in the app's transaction, and the app waits for it. It is not `requires`: if PostgreSQL fails, the app still starts and retries.
 
 ```Nix
 {

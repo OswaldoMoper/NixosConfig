@@ -535,10 +535,10 @@ rec {
         default = null;
         example = { name = "myapp"; user = "myapp"; };
         description = ''
-          Declares that the app needs the host's PostgreSQL. Today this orders the
-          unit after postgresql.service and lets the pre-deploy checks verify that
-          'environment' really carries these names. Provisioning the role and the
-          database from here is the next step.
+          Declares that the app needs the host's PostgreSQL. The unit wants
+          postgresql.service and starts after it, without requiring it; the
+          pre-deploy checks verify that 'environment' really carries these names,
+          and the pair goes to postgresql.ensure.
         '';
       };
     };
