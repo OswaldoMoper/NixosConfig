@@ -1,4 +1,4 @@
-{ config, pkgs, lib, inputs, ... }:
+{ config, options, pkgs, lib, ... }:
 
 let
   inherit (lib) mkIf mkOption mkEnableOption types listToAttrs mkMerge;
@@ -135,8 +135,9 @@ in
             message = "webStack requires a valid email";
           }
           {
-            assertion = lib.any (a: a.database != null) allApps -> config.postgresql.enable;
-            message = "webStack: an app declares a database but postgresql.enable is false, so nothing would create it.";
+            assertion = lib.any (a: a.database != null) allApps
+              -> (options ? postgresql && config.postgresql.enable);
+            message = "webStack: an app declares a database but the postgresql module is not imported or postgresql.enable is false, so nothing would create it.";
           }
           {
             assertion = lib.all (a: a.umask == null || a.kind != "profile" || a.unit != null) allApps;

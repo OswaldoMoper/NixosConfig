@@ -343,6 +343,8 @@ The wrapper is resolved automatically.
 
 Where the [`watcher`](./watcher.md) module is imported, every `domain`, alias and redirect of `nginx.apps`, and every name in `nginx.redirects`, is added to `watcher.sites`. It is the same relation as with `postgresql.ensure`: webStack writes into the other module's option, and the host decides whether that module is on.
 
+webStack imports none of the modules it writes into — `watcher`, [`postgresql`](./postgresql.md), [`vm`](./vm.md) and agenix's `age` — and writes into each only where the host imports it, so the module evaluates on its own. The one it cannot do without is `postgresql` once an app declares a `database`, and that is an assertion (see Validations).
+
 ## Systemd Services
 
 Each **`managed`** app (of nginx or tunnel) generates a service. `profile` apps do not:
@@ -381,7 +383,7 @@ The module enforces:
 - If tunnel is enabled -> must be apps on `tunnels.apps`
 - If nginx is enabled -> must be apps on `nginx.apps`
 - At most one app may set `default = true`. Either `kind` may take it: `default_server` is a flag nginx puts on each of a virtualHost's listen directives, so it does not matter whether webStack or the app's own module wrote them
-- An app that declares a `database` needs `postgresql.enable` — otherwise the unit starts and fails to connect, which reads as an app bug
+- An app that declares a `database` needs the `postgresql` module imported and `postgresql.enable` — otherwise the unit starts and fails to connect, which reads as an app bug
 - **No virtualHost may list the same `addr:port` twice.** `listen` is a `listOf`, so two definitions **concatenate** rather than override: a `kind = "profile"` app whose own module already serves TLS, given `tls = true` here as well, declares 443 twice over. nginx answers that with `[emerg] a duplicate listen` and does not start — measured — so this assertion turns a machine that comes up without a web server into an evaluation error
 
 These are implemented via Nix assertions.
